@@ -1,4 +1,9 @@
 %% hungarian + astar => numbered csv state sequence
+% Generates numbered CSV transition states from a start CSV to a goal CSV.
+%
+% The output filename index is entered from the MATLAB Command Window:
+%   0  -> 000.csv, 001.csv, 002.csv, ...
+%   12 -> 012.csv, 013.csv, 014.csv, ...
 
 clear; close all; clc;
 
@@ -27,8 +32,23 @@ P.N = 32;
 P.occupied_value = 7;
 P.empty_value = 0;
 
+%% OUTPUT START INDEX INPUT
+
+P.output_start_index = input('Enter output start index, e.g., 0 or 12: ');
+
+if isempty(P.output_start_index)
+    P.output_start_index = 0;
+end
+
+assert(isscalar(P.output_start_index) && ...
+       isnumeric(P.output_start_index) && ...
+       isfinite(P.output_start_index) && ...
+       P.output_start_index >= 0 && ...
+       floor(P.output_start_index) == P.output_start_index, ...
+       'output_start_index must be a nonnegative integer.');
+
 P.row_spacing = sqrt(3)/2;
-P.assignment_cost = 'euclidean';
+P.assignment_cost = 'euclidean';   % 'euclidean' or 'astar_length'
 P.check_collisions = true;
 
 P.show_figure = true;
@@ -54,9 +74,9 @@ startPayload = readmatrix(P.start_csv);
 goalPayload  = readmatrix(P.goal_csv);
 
 assert(isequal(size(startPayload), [P.N, P.N]), ...
-    'Start CSV must be 32 x 32.');
+    'Start CSV must be %d x %d.', P.N, P.N);
 assert(isequal(size(goalPayload), [P.N, P.N]), ...
-    'Goal CSV must be 32 x 32.');
+    'Goal CSV must be %d x %d.', P.N, P.N);
 
 startMap = payloadToPhysicalMap(startPayload, P);
 goalMap  = payloadToPhysicalMap(goalPayload, P);
@@ -161,6 +181,8 @@ if P.show_figure
         currentCells = mapToCells(currentMap, P.occupied_value);
         currentXY = cellToXY(currentCells, P);
 
+        fileIndex = P.output_start_index + step - 1;
+
         cla(ax);
         setupAxes(ax, P);
 
@@ -182,7 +204,7 @@ if P.show_figure
         end
 
         title(ax, sprintf('Transition state | %03d.csv | frame %d/%d | active = %d', ...
-            step-1, step, maxSteps, size(currentCells,1)), ...
+            fileIndex, step, maxSteps, size(currentCells,1)), ...
             'FontSize', 13, 'FontWeight', 'bold');
 
         drawnow;
@@ -204,17 +226,22 @@ end
 
 fprintf('\n[5] Saving numbered CSV sequence...\n');
 
-nDigits = max(3, ceil(log10(maxSteps)));
+firstIndex = P.output_start_index;
+lastIndex  = P.output_start_index + maxSteps - 1;
+
+nDigits = max(3, ceil(log10(lastIndex + 1)));
 
 for step = 1:maxSteps
-    fname = sprintf(['%0', num2str(nDigits), 'd.csv'], step-1);
+    fileIndex = P.output_start_index + step - 1;
+
+    fname = sprintf(['%0', num2str(nDigits), 'd.csv'], fileIndex);
     payloadOut = physicalMapToPayload(maps{step}, P);
     writematrix(payloadOut, fullfile(P.out_dir, fname));
 end
 
 fprintf('    saved files: %s.csv to %s.csv\n', ...
-    sprintf(['%0', num2str(nDigits), 'd'], 0), ...
-    sprintf(['%0', num2str(nDigits), 'd'], maxSteps-1));
+    sprintf(['%0', num2str(nDigits), 'd'], firstIndex), ...
+    sprintf(['%0', num2str(nDigits), 'd'], lastIndex));
 
 fprintf('    saved to folder: %s\n', P.out_dir);
 fprintf('\nDone.\n');
