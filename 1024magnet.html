@@ -1,0 +1,1189 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>1024 Magnet Field Simulator</title>
+  <script>
+    window.MathJax = {
+      tex: {
+        inlineMath: [["\\(", "\\)"], ["$", "$"]],
+        displayMath: [["\\[", "\\]"]]
+      },
+      svg: { fontCache: "global" }
+    };
+  </script>
+  <script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
+  <style>
+    :root {
+      --bg: #000000;
+      --panel: #111214;
+      --ink: #d7dae0;
+      --muted: #9aa3ad;
+      --line: #3d424d;
+      --accent: #ffd866;
+      --north: #ff6b5a;
+      --south: #66a8ff;
+      --off: #5a6270;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: "Segoe UI", "Noto Sans", sans-serif;
+      color: var(--ink);
+      background: var(--bg);
+      min-height: 100vh;
+    }
+
+    .wrap {
+      max-width: 1460px;
+      margin: 0 auto;
+      padding: 26px;
+      display: grid;
+      gap: 22px;
+      grid-template-columns: 1fr 390px;
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35);
+    }
+
+    .panel h1,
+    .panel h2 {
+      margin: 0;
+      font-weight: 700;
+      letter-spacing: 0.01em;
+    }
+
+    .sim-header {
+      padding: 18px 20px;
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      flex-wrap: wrap;
+    }
+
+    .sim-header h1 {
+      font-size: 1.35rem;
+    }
+
+    .sim-metrics {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(130px, auto));
+      gap: 8px;
+    }
+
+    .metric-box {
+      min-width: 138px;
+      padding: 8px 10px;
+      border: 1px solid #505662;
+      border-radius: 10px;
+      background: #0b0c0f;
+      text-align: right;
+    }
+
+    .metric-label {
+      display: block;
+      color: var(--muted);
+      font-size: 0.72rem;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+    }
+
+    .metric-value {
+      display: block;
+      margin-top: 2px;
+      color: #e9ecf2;
+      font-size: 1.02rem;
+      font-weight: 700;
+      letter-spacing: 0.01em;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    button {
+      border: 1px solid #505662;
+      background: #181a1f;
+      color: #dfe2ea;
+      border-radius: 10px;
+      padding: 9px 13px;
+      font-size: 0.85rem;
+      cursor: pointer;
+      transition: border-color 0.15s ease, transform 0.15s ease, background 0.15s ease, color 0.15s ease;
+    }
+
+    button:hover {
+      border-color: #8f98a8;
+      background: #242830;
+      transform: translateY(-1px);
+    }
+
+    button.is-active {
+      background: #ffd866;
+      color: #141414;
+      border-color: #ffd866;
+    }
+
+    .mode-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px;
+      border: 1px solid #505662;
+      border-radius: 12px;
+      background: #0d0f13;
+    }
+
+    .mode-toggle .mode-btn {
+      border-radius: 8px;
+      border-color: transparent;
+      background: transparent;
+      color: #c4cad3;
+      padding: 8px 12px;
+      min-width: 78px;
+    }
+
+    .mode-toggle .mode-btn:hover {
+      border-color: transparent;
+      background: #232730;
+      transform: none;
+    }
+
+    .mode-toggle .mode-btn.is-active {
+      background: #ffd866;
+      color: #141414;
+      border-color: #ffd866;
+    }
+
+    .slider-row {
+      display: grid;
+      grid-template-columns: 210px 1fr 60px;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: 0.88rem;
+    }
+
+    .control-section {
+      width: 100%;
+      margin-top: 12px;
+      padding: 10px 12px 12px;
+      border: 1px solid #4c525e;
+      border-radius: 10px;
+      background: #0d0f13;
+    }
+
+    .section-title {
+      font-size: 0.8rem;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: #c4cad3;
+      margin-bottom: 6px;
+    }
+
+    .calibration-section .slider-row {
+      grid-template-columns: 210px 1fr;
+      margin-top: 8px;
+    }
+
+    .calibration-section .slider-row span {
+      display: none;
+    }
+
+    .slider-row input[type="number"],
+    .slider-row input[type="text"] {
+      width: 100%;
+      padding: 7px 9px;
+      border: 1px solid #505662;
+      border-radius: 8px;
+      background: #090b0f;
+      color: #e6e9ef;
+      font-size: 0.88rem;
+      outline: none;
+    }
+
+    .slider-row input[type="number"]:focus,
+    .slider-row input[type="text"]:focus {
+      border-color: #8f98a8;
+    }
+
+    .slider-row input[type="number"]:disabled,
+    .slider-row input[type="text"]:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+    }
+
+    .control-section button {
+      margin-top: 8px;
+    }
+
+    .canvas-wrap {
+      position: relative;
+      padding: 18px;
+    }
+
+    canvas {
+      width: 100%;
+      height: auto;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      display: block;
+      background: #0d0f13;
+    }
+
+    #magnetCanvas {
+      position: absolute;
+      left: 18px;
+      top: 18px;
+      pointer-events: auto;
+      background: transparent;
+      border: none;
+    }
+
+    .side {
+      padding: 0;
+      display: grid;
+      gap: 14px;
+      align-content: start;
+    }
+
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 13px;
+      background: #14171c;
+    }
+
+    .card h2 {
+      font-size: 0.95rem;
+      margin-bottom: 8px;
+    }
+
+    .kv {
+      font-size: 0.9rem;
+      line-height: 1.45;
+      color: #d2d7e0;
+    }
+
+    .kv code {
+      color: var(--accent);
+      font-weight: 600;
+    }
+
+    .kv-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.86rem;
+    }
+
+    .kv-table th,
+    .kv-table td {
+      border-bottom: 1px solid var(--line);
+      padding: 6px 4px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    .kv-table th {
+      width: 44%;
+      color: var(--muted);
+      font-weight: 500;
+    }
+
+    .equation {
+      margin-bottom: 10px;
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #090b0f;
+    }
+
+    .equation mjx-container {
+      color: #eceff4 !important;
+    }
+
+    .math-vars {
+      margin-top: 8px;
+      font-size: 0.82rem;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+
+    .small {
+      margin-top: 6px;
+      color: var(--muted);
+      font-size: 0.82rem;
+      line-height: 1.4;
+    }
+
+    .legend {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      font-size: 0.86rem;
+      color: #c4cad3;
+    }
+
+    .dot {
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      margin-right: 5px;
+      vertical-align: middle;
+    }
+
+    @media (max-width: 1050px) {
+      .wrap {
+        grid-template-columns: 1fr;
+      }
+
+      .sim-metrics {
+        width: 100%;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .metric-box {
+        min-width: 0;
+      }
+
+      #magnetCanvas {
+        left: 18px;
+        top: 18px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <section class="panel">
+      <div class="sim-header">
+        <h1>1024 Magnet Field Simulator</h1>
+        <div class="sim-metrics">
+          <div class="metric-box">
+            <span class="metric-label">Active Magnets</span>
+            <span class="metric-value" id="totalCurrentDisplay">0</span>
+          </div>
+          <div class="metric-box">
+            <span class="metric-label">Active Fraction</span>
+            <span class="metric-value" id="totalPowerDisplay">0.0%</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="controls">
+        <div class="mode-toggle" aria-label="Mode Toggle">
+          <button id="btnEdit" class="mode-btn">Edit</button>
+          <button id="btnAnalysis" class="mode-btn">Analysis</button>
+        </div>
+        <button id="btnClear">Clear</button>
+        <button id="btnRandom">Random</button>
+
+        <div class="control-section">
+          <div class="section-title">Export TX CSV</div>
+          <div class="slider-row">
+            <label for="txExportName">File Name</label>
+            <input id="txExportName" type="text" value="magnets_1" spellcheck="false" />
+            <span>.csv</span>
+          </div>
+          <button id="btnExport">Export TX CSV (-7..7)</button>
+        </div>
+      </div>
+
+      <div class="canvas-wrap" id="canvasWrap">
+        <canvas id="fieldCanvas" width="980" height="640"></canvas>
+        <canvas id="magnetCanvas" width="980" height="640"></canvas>
+      </div>
+    </section>
+
+    <aside class="side">
+      <div class="card">
+        <h2>Arrangement</h2>
+        <div class="kv">
+          Electromagnet diameter: <code>20 mm</code><br />
+          
+          Nearest center distance: <code>20 mm</code><br />
+         
+        </div>
+        
+      </div>
+
+
+
+      <div class="card">
+        <h2>Measured Bz Field Model (z = 25 mm)</h2>
+        <div class="kv equation" id="modelEquation">
+          \[
+          B_z(r) = \mathrm{lerp}\bigl(B_z^{\mathrm{table}},\, r\bigr),\quad
+          r = \sqrt{(x-x_i)^2+(y-y_i)^2}
+          \]
+          \[
+          B_{z,\mathrm{total}}(x,y) = \sum_i s_i\, B_z(r_i)
+          \]
+          \[
+          \mathbf{F} = m\,\nabla B_{z,\mathrm{total}},\quad m = 1.7\times10^{-5}\ \mathrm{A{\cdot}m^2}
+          \]
+        </div>
+        <div class="math-vars" id="modelVars">
+          Measured radial profile at \(z=25\) mm (Gauss):
+          \(r=0\): 4.87,&ensp;\(r=10\): 3.04,&ensp;\(r=20\): 1.17,&ensp;\(r=30\): 0.26.
+          Zero beyond 39 mm.
+        </div>
+        <div class="kv" id="modelInfo">
+          Bz model summary appears here.
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Legend</h2>
+        <div class="legend">
+          <span><i class="dot" style="background: var(--north)"></i>N (+1)</span>
+          <span><i class="dot" style="background: var(--south)"></i>S (-1)</span>
+          <span><i class="dot" style="background: var(--off)"></i>OFF (0)</span>
+        </div>
+      </div>
+
+    </aside>
+  </div>
+
+  <script>
+    const ROWS = 32;
+    const COLS = 32;
+    const TOTAL = ROWS * COLS;
+    const D_MM = 20;
+    const DX_MM = D_MM;
+    const DY_MM = D_MM * Math.sqrt(3) / 2;
+    const PAD = 26;
+    const FIELD_RES_X = 256;
+    const FIELD_RES_Y = 160;
+    const MM_TO_M = 1e-3;
+    const GAUSS_TO_TESLA = 1e-4;
+
+    // Measured Bz radial profile at z=25mm (from dynamics.txt BZ_RADIAL_PROFILE)
+    // 0.5 * (BZ_TABLE col3 + BZ_TABLE col4), in Gauss, at r = 0, 10, 20, 30 mm
+    const BZ_PROFILE_GAUSS = [4.8720, 3.0408, 1.1703, 0.2632];
+    const BZ_RADIAL_STEP_MM = 10.0;
+    const BZ_EXTERNAL_RANGE_MM = 39.0;
+    const DISK_MOMENT = 1.7e-5; // A·m², ferrofluid disk magnetic moment
+
+    const fieldCanvas = document.getElementById("fieldCanvas");
+    const magnetCanvas = document.getElementById("magnetCanvas");
+    const fctx = fieldCanvas.getContext("2d");
+    const mctx = magnetCanvas.getContext("2d");
+
+    const totalCurrentDisplay = document.getElementById("totalCurrentDisplay");
+    const totalPowerDisplay = document.getElementById("totalPowerDisplay");
+    const selectedInfo = document.getElementById("selectedInfo");
+    const modelInfo = document.getElementById("modelInfo");
+    const btnEdit = document.getElementById("btnEdit");
+    const btnAnalysis = document.getElementById("btnAnalysis");
+
+    const txExportName = document.getElementById("txExportName");
+
+    const state = new Int8Array(TOTAL);
+    const positions = new Array(TOTAL);
+
+    const palette = {
+      north: "#ff6b5a",
+      south: "#66a8ff",
+      off: "#5a6270",
+      edge: "#c2c7d0"
+    };
+
+    let selected = -1;
+    let lastFieldStats = { min: 0, max: 0 };
+    let analysisMode = false;
+    let txExportIndex = 1;
+
+    const boundsMm = {
+      xMin: -D_MM / 2,
+      xMax: (COLS - 1 + 0.5) * DX_MM + D_MM / 2,
+      yMin: -D_MM / 2,
+      yMax: (ROWS - 1) * DY_MM + D_MM / 2
+    };
+
+    function idx(row, col) {
+      return row * COLS + col;
+    }
+
+    function rc(id) {
+      return { row: Math.floor(id / COLS), col: id % COLS };
+    }
+
+    // SAM LAB mapping: ID 1 starts at bottom-left, moves upward, then next column.
+    function payloadIndexFromRowCol(row, col) {
+      return (col * ROWS) + ((ROWS - 1) - row);
+    }
+
+    function buildOrderedPayloads() {
+      const payloadTx = new Array(TOTAL).fill(0);
+      for (let col = 0; col < COLS; col++) {
+        for (let row = ROWS - 1; row >= 0; row--) {
+          const id = idx(row, col);
+          const payloadIdx = payloadIndexFromRowCol(row, col);
+          payloadTx[payloadIdx] = state[id] * 7;
+        }
+      }
+      return { payloadTx };
+    }
+
+    function bzTableGauss(r_mm) {
+      if (r_mm >= BZ_EXTERNAL_RANGE_MM) return 0;
+      const idx_float = Math.min(Math.max(r_mm / BZ_RADIAL_STEP_MM, 0), 2.9999);
+      const idx_low = Math.floor(idx_float);
+      const frac = idx_float - idx_low;
+      return BZ_PROFILE_GAUSS[idx_low] * (1 - frac) + BZ_PROFILE_GAUSS[idx_low + 1] * frac;
+    }
+
+    function downloadText(filename, text) {
+      const blob = new Blob([text], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    function normalizeExportBaseName(rawName) {
+      const trimmed = String(rawName || "").trim();
+      const withoutExt = trimmed.replace(/\.csv$/i, "");
+      const safe = withoutExt.replace(/[\\/:*?"<>|]+/g, "_");
+      return safe || `magnets_${txExportIndex}`;
+    }
+
+    function updateNextExportNameFrom(baseName) {
+      const m = /^magnets_(\d+)$/i.exec(baseName);
+      if (m) txExportIndex = Number(m[1]) + 1;
+      else txExportIndex += 1;
+      if (txExportName) txExportName.value = `magnets_${txExportIndex}`;
+    }
+
+    function mmPosition(row, col) {
+      return {
+        x: (col + ((row & 1) ? 0.5 : 0)) * DX_MM,
+        y: row * DY_MM
+      };
+    }
+
+    function buildPositions() {
+      for (let r = 0; r < ROWS; r++) {
+        for (let c = 0; c < COLS; c++) {
+          const id = idx(r, c);
+          positions[id] = mmPosition(r, c);
+        }
+      }
+    }
+
+    function getLayoutTransform(w = fieldCanvas.width, h = fieldCanvas.height) {
+      const contentW = boundsMm.xMax - boundsMm.xMin;
+      const contentH = boundsMm.yMax - boundsMm.yMin;
+      const sx = (w - PAD * 2) / (contentW || 1);
+      const sy = (h - PAD * 2) / (contentH || 1);
+      const fitScale = Math.min(sx, sy);
+      const s = fitScale;
+      const ox = (w - contentW * s) / 2;
+      const oy = (h - contentH * s) / 2;
+      return { s, ox, oy, contentW, contentH };
+    }
+
+    function mmToPx(xMm, yMm) {
+      const t = getLayoutTransform();
+      return {
+        x: t.ox + (xMm - boundsMm.xMin) * t.s,
+        y: t.oy + (yMm - boundsMm.yMin) * t.s,
+        s: t.s
+      };
+    }
+
+    function pixelToMm(xPx, yPx) {
+      const t = getLayoutTransform();
+      return {
+        x: (xPx - t.ox) / t.s + boundsMm.xMin,
+        y: (yPx - t.oy) / t.s + boundsMm.yMin
+      };
+    }
+
+    function totalBzAt(xMm, yMm) {
+      let total = 0;
+      for (let id = 0; id < TOTAL; id++) {
+        if (state[id] === 0) continue;
+        const p = positions[id];
+        const dx = xMm - p.x;
+        const dy = yMm - p.y;
+        total += state[id] * bzTableGauss(Math.sqrt(dx * dx + dy * dy));
+      }
+      return total;
+    }
+
+    function hexToRgba(hex, alpha) {
+      const h = hex.replace("#", "");
+      const full = h.length === 3 ? h.split("").map((c) => c + c).join("") : h;
+      const intVal = parseInt(full, 16);
+      const r = (intVal >> 16) & 255;
+      const g = (intVal >> 8) & 255;
+      const b = intVal & 255;
+      const a = Math.max(0, Math.min(1, alpha));
+      return `rgba(${r}, ${g}, ${b}, ${a.toFixed(3)})`;
+    }
+
+    function drawMagnets() {
+      mctx.clearRect(0, 0, magnetCanvas.width, magnetCanvas.height);
+      const radiusPx = mmToPx(D_MM / 2, 0).x - mmToPx(0, 0).x;
+
+      for (let id = 0; id < TOTAL; id++) {
+        const p = positions[id];
+        const px = mmToPx(p.x, p.y);
+        mctx.beginPath();
+        mctx.arc(px.x, px.y, radiusPx, 0, Math.PI * 2);
+
+        if (state[id] > 0) mctx.fillStyle = hexToRgba(palette.north, 1.0);
+        else if (state[id] < 0) mctx.fillStyle = hexToRgba(palette.south, 1.0);
+        else mctx.fillStyle = hexToRgba(palette.off, 0.72);
+
+        mctx.fill();
+        mctx.lineWidth = id === selected ? 2.2 : 0.8;
+        mctx.strokeStyle = id === selected ? "#ffe082" : palette.edge;
+        mctx.stroke();
+      }
+    }
+
+    function colorFromValue(v) {
+      const t = Math.max(-1, Math.min(1, v));
+      if (t >= 0) {
+        const r = 255;
+        const g = Math.round(225 - 140 * t);
+        const b = Math.round(220 - 160 * t);
+        return [r, g, b, 196];
+      }
+      const u = -t;
+      const r = Math.round(220 - 150 * u);
+      const g = Math.round(230 - 120 * u);
+      const b = 255;
+      return [r, g, b, 196];
+    }
+
+    function typesetModelEquation() {
+      const eq = document.getElementById("modelEquation");
+      const vars = document.getElementById("modelVars");
+      if (!eq) return;
+      if (window.MathJax && window.MathJax.typesetPromise) {
+        const targets = vars ? [eq, vars] : [eq];
+        window.MathJax.typesetPromise(targets).catch(() => {});
+      }
+    }
+
+    function computeFieldGrid() {
+      const w = fieldCanvas.width;
+      const h = fieldCanvas.height;
+      const resX = FIELD_RES_X;
+      const resY = FIELD_RES_Y;
+      const fieldVals = new Float32Array(resX * resY);
+      const spanX = boundsMm.xMax - boundsMm.xMin;
+      const spanY = boundsMm.yMax - boundsMm.yMin;
+
+      let minB = Infinity;
+      let maxB = -Infinity;
+
+      for (let gy = 0; gy < resY; gy++) {
+        for (let gx = 0; gx < resX; gx++) {
+          const xMm = boundsMm.xMin + ((gx + 0.5) / resX) * spanX;
+          const yMm = boundsMm.yMin + ((gy + 0.5) / resY) * spanY;
+          const b = totalBzAt(xMm, yMm);
+          const n = gy * resX + gx;
+
+          fieldVals[n] = b;
+          if (b < minB) minB = b;
+          if (b > maxB) maxB = b;
+        }
+      }
+
+      if (!Number.isFinite(minB)) minB = 0;
+      if (!Number.isFinite(maxB)) maxB = 0;
+
+      return {
+        w,
+        h,
+        resX,
+        resY,
+        fieldVals,
+        min: minB,
+        max: maxB,
+        maxAbs: Math.max(Math.abs(minB), Math.abs(maxB), 1)
+      };
+    }
+
+    function renderHeatmap(grid) {
+      const image = fctx.createImageData(grid.w, grid.h);
+      const data = image.data;
+      const t = getLayoutTransform(grid.w, grid.h);
+      const contentWpx = t.contentW * t.s;
+      const contentHpx = t.contentH * t.s;
+
+      for (let off = 0; off < data.length; off += 4) {
+        data[off] = 8;
+        data[off + 1] = 10;
+        data[off + 2] = 14;
+        data[off + 3] = 255;
+      }
+
+      for (let gy = 0; gy < grid.resY; gy++) {
+        for (let gx = 0; gx < grid.resX; gx++) {
+          const n = gy * grid.resX + gx;
+          const [r, g, b, a] = colorFromValue(grid.fieldVals[n] / grid.maxAbs);
+
+          const x0 = Math.floor(t.ox + (gx / grid.resX) * contentWpx);
+          const x1 = Math.floor(t.ox + ((gx + 1) / grid.resX) * contentWpx);
+          const y0 = Math.floor(t.oy + (gy / grid.resY) * contentHpx);
+          const y1 = Math.floor(t.oy + ((gy + 1) / grid.resY) * contentHpx);
+
+          const xs = Math.max(0, Math.min(grid.w, x0));
+          const xe = Math.max(0, Math.min(grid.w, x1));
+          const ys = Math.max(0, Math.min(grid.h, y0));
+          const ye = Math.max(0, Math.min(grid.h, y1));
+          if (xe <= xs || ye <= ys) continue;
+
+          for (let y = ys; y < ye; y++) {
+            let off = (y * grid.w + xs) * 4;
+            for (let x = xs; x < xe; x++) {
+              data[off] = r;
+              data[off + 1] = g;
+              data[off + 2] = b;
+              data[off + 3] = a;
+              off += 4;
+            }
+          }
+        }
+      }
+
+      fctx.putImageData(image, 0, 0);
+      fctx.strokeStyle = "rgba(153, 162, 176, 0.45)";
+      fctx.lineWidth = 1;
+      fctx.strokeRect(t.ox, t.oy, t.contentW * t.s, t.contentH * t.s);
+    }
+
+    function drawFieldScale(grid) {
+      const t = getLayoutTransform(grid.w, grid.h);
+      const barW = 12;
+      const contentBottom = t.oy + t.contentH * t.s;
+      const preferredH = Math.min(260, Math.max(120, t.contentH * t.s * 0.6));
+      const barH = Math.min(preferredH, grid.h - 30);
+      const barY = Math.max(12, Math.min(contentBottom - barH, t.oy + 12));
+      const barXRaw = t.ox + t.contentW * t.s + 10;
+      const barX = Math.max(10, Math.min(grid.w - barW - 46, barXRaw));
+
+      const grad = fctx.createLinearGradient(0, barY, 0, barY + barH);
+      grad.addColorStop(0, "rgba(255, 88, 67, 0.95)");
+      grad.addColorStop(0.5, "rgba(229, 233, 241, 0.95)");
+      grad.addColorStop(1, "rgba(90, 160, 255, 0.95)");
+      fctx.fillStyle = grad;
+      fctx.fillRect(barX, barY, barW, barH);
+      fctx.strokeStyle = "rgba(186, 194, 206, 0.82)";
+      fctx.lineWidth = 1;
+      fctx.strokeRect(barX, barY, barW, barH);
+
+      const maxText = `+${grid.maxAbs.toFixed(0)} G`;
+      const midText = "0 G";
+      const minText = `-${grid.maxAbs.toFixed(0)} G`;
+      fctx.fillStyle = "rgba(235, 239, 246, 0.96)";
+      fctx.font = "12px Segoe UI, sans-serif";
+      fctx.textAlign = "left";
+      fctx.textBaseline = "middle";
+      const tx = barX + barW + 7;
+      fctx.fillText(maxText, tx, barY + 1);
+      fctx.fillText(midText, tx, barY + barH * 0.5);
+      fctx.fillText(minText, tx, barY + barH - 1);
+    }
+
+    function drawXYAxes(ctx, w, h) {
+      const t = getLayoutTransform(w, h);
+      const contentBottom = t.oy + t.contentH * t.s;
+      const originX = 8;
+      const originY = Math.round(Math.min(h - 12, contentBottom - 8));
+      const axisLen = 36;
+      const axisTopY = Math.max(8, originY - axisLen);
+
+      ctx.save();
+      ctx.strokeStyle = "rgba(235, 239, 246, 0.92)";
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      ctx.moveTo(originX, originY);
+      ctx.lineTo(originX + axisLen, originY);
+      ctx.moveTo(originX, originY);
+      ctx.lineTo(originX, axisTopY);
+      ctx.stroke();
+
+      ctx.fillStyle = "rgba(235, 239, 246, 0.96)";
+      ctx.font = "12px Segoe UI, sans-serif";
+      ctx.textAlign = "left";
+      ctx.textBaseline = "middle";
+      ctx.fillText("x", originX + axisLen + 5, originY);
+      ctx.textAlign = "center";
+      ctx.textBaseline = "bottom";
+      ctx.fillText("y", originX, axisTopY - 4);
+      ctx.restore();
+    }
+
+    function lerpIsoPoint(level, va, vb, ax, ay, bx, by) {
+      if (Math.abs(vb - va) < 1e-9) {
+        return { x: (ax + bx) * 0.5, y: (ay + by) * 0.5 };
+      }
+      const tRaw = (level - va) / (vb - va);
+      const t = Math.max(0, Math.min(1, tRaw));
+      return {
+        x: ax + (bx - ax) * t,
+        y: ay + (by - ay) * t
+      };
+    }
+
+    function drawContourLevel(grid, level, strokeStyle, lineWidth) {
+      const { w, h, resX, resY, fieldVals } = grid;
+      const t = getLayoutTransform(w, h);
+      const idxVal = (x, y) => fieldVals[y * resX + x];
+      const px = (x) => t.ox + ((x + 0.5) / resX) * t.contentW * t.s;
+      const py = (y) => t.oy + ((y + 0.5) / resY) * t.contentH * t.s;
+
+      fctx.beginPath();
+      for (let gy = 0; gy < resY - 1; gy++) {
+        for (let gx = 0; gx < resX - 1; gx++) {
+          const v0 = idxVal(gx, gy);
+          const v1 = idxVal(gx + 1, gy);
+          const v2 = idxVal(gx + 1, gy + 1);
+          const v3 = idxVal(gx, gy + 1);
+
+          const c0 = v0 >= level ? 1 : 0;
+          const c1 = v1 >= level ? 1 : 0;
+          const c2 = v2 >= level ? 1 : 0;
+          const c3 = v3 >= level ? 1 : 0;
+          const code = c0 | (c1 << 1) | (c2 << 2) | (c3 << 3);
+          if (code === 0 || code === 15) continue;
+
+          const x0 = px(gx);
+          const x1 = px(gx + 1);
+          const y0 = py(gy);
+          const y1 = py(gy + 1);
+
+          const edgePoint = (edge) => {
+            switch (edge) {
+              case 0: return lerpIsoPoint(level, v0, v1, x0, y0, x1, y0);
+              case 1: return lerpIsoPoint(level, v1, v2, x1, y0, x1, y1);
+              case 2: return lerpIsoPoint(level, v3, v2, x0, y1, x1, y1);
+              default: return lerpIsoPoint(level, v0, v3, x0, y0, x0, y1);
+            }
+          };
+
+          const segments = [];
+          switch (code) {
+            case 1: segments.push([3, 0]); break;
+            case 2: segments.push([0, 1]); break;
+            case 3: segments.push([3, 1]); break;
+            case 4: segments.push([1, 2]); break;
+            case 5: segments.push([3, 0], [1, 2]); break;
+            case 6: segments.push([0, 2]); break;
+            case 7: segments.push([3, 2]); break;
+            case 8: segments.push([2, 3]); break;
+            case 9: segments.push([0, 2]); break;
+            case 10: segments.push([0, 1], [2, 3]); break;
+            case 11: segments.push([1, 2]); break;
+            case 12: segments.push([1, 3]); break;
+            case 13: segments.push([0, 1]); break;
+            case 14: segments.push([0, 3]); break;
+            default: break;
+          }
+
+          for (let i = 0; i < segments.length; i++) {
+            const pA = edgePoint(segments[i][0]);
+            const pB = edgePoint(segments[i][1]);
+            fctx.moveTo(pA.x, pA.y);
+            fctx.lineTo(pB.x, pB.y);
+          }
+        }
+      }
+      fctx.strokeStyle = strokeStyle;
+      fctx.lineWidth = lineWidth;
+      fctx.stroke();
+    }
+
+    function drawContourOverlay(grid) {
+      const levels = 9;
+      for (let i = 1; i <= levels; i++) {
+        const level = (grid.maxAbs * i) / (levels + 1);
+        drawContourLevel(grid, level, "rgba(255, 122, 94, 0.88)", 1.05);
+        drawContourLevel(grid, -level, "rgba(106, 170, 255, 0.88)", 1.05);
+      }
+      if (grid.min < 0 && grid.max > 0) {
+        drawContourLevel(grid, 0, "rgba(232, 238, 248, 0.9)", 1.35);
+      }
+
+      const t = getLayoutTransform(grid.w, grid.h);
+      fctx.strokeStyle = "rgba(153, 162, 176, 0.45)";
+      fctx.lineWidth = 1;
+      fctx.strokeRect(t.ox, t.oy, t.contentW * t.s, t.contentH * t.s);
+    }
+
+    function syncModeButtons() {
+      if (btnEdit) btnEdit.classList.toggle("is-active", !analysisMode);
+      if (btnAnalysis) btnAnalysis.classList.toggle("is-active", analysisMode);
+    }
+
+    function renderSummary() {
+      let activeCount = 0;
+      for (let i = 0; i < TOTAL; i++) {
+        if (state[i] !== 0) activeCount++;
+      }
+      if (totalCurrentDisplay) totalCurrentDisplay.textContent = String(activeCount);
+      if (totalPowerDisplay) totalPowerDisplay.textContent = `${(activeCount / TOTAL * 100).toFixed(1)}%`;
+    }
+
+    function stateToBits(v) {
+      if (v > 0) return [1, 0];
+      if (v < 0) return [0, 1];
+      return [0, 0];
+    }
+
+    function forceDensityAt(xMm, yMm) {
+      const stepMm = 0.5;
+      const stepM = stepMm * MM_TO_M;
+      const dBzdx = (totalBzAt(xMm + stepMm, yMm) - totalBzAt(xMm - stepMm, yMm))
+                    / (2 * stepMm) * GAUSS_TO_TESLA / MM_TO_M;
+      const dBzdy = (totalBzAt(xMm, yMm + stepMm) - totalBzAt(xMm, yMm - stepMm))
+                    / (2 * stepMm) * GAUSS_TO_TESLA / MM_TO_M;
+      return {
+        fx: DISK_MOMENT * dBzdx,
+        fy: DISK_MOMENT * dBzdy
+      };
+    }
+
+    function formatSci(v) {
+      if (!Number.isFinite(v)) return "NaN";
+      if (Math.abs(v) < 1e-9) return "0.00e+0";
+      return v.toExponential(2);
+    }
+
+    function renderModelInfo(stats) {
+      modelInfo.innerHTML =
+        `<table class="kv-table">` +
+        `<tr><th>Probe Height z</th><td><code>25.0 mm (fixed)</code></td></tr>` +
+        `<tr><th>Bz @ r=0 mm</th><td><code>${BZ_PROFILE_GAUSS[0].toFixed(4)} G</code></td></tr>` +
+        `<tr><th>Bz @ r=10 mm</th><td><code>${BZ_PROFILE_GAUSS[1].toFixed(4)} G</code></td></tr>` +
+        `<tr><th>Bz @ r=20 mm</th><td><code>${BZ_PROFILE_GAUSS[2].toFixed(4)} G</code></td></tr>` +
+        `<tr><th>Bz @ r=30 mm</th><td><code>${BZ_PROFILE_GAUSS[3].toFixed(4)} G</code></td></tr>` +
+        `<tr><th>External range</th><td><code>${BZ_EXTERNAL_RANGE_MM} mm</code></td></tr>` +
+        `<tr><th>Disk moment m</th><td><code>${DISK_MOMENT.toExponential(1)} A·m²</code></td></tr>` +
+        `<tr><th>Field map range</th><td><code>${stats.min.toFixed(1)} .. ${stats.max.toFixed(1)} G</code></td></tr>` +
+        `</table>`;
+    }
+
+    function renderSelected() {
+      if (!selectedInfo) return;
+      if (selected < 0) {
+        selectedInfo.textContent = "Click a magnet to inspect mapping.";
+        return;
+      }
+
+      const { row, col } = rc(selected);
+      const p = positions[selected];
+      const v = state[selected];
+      const [a, b] = stateToBits(v);
+      const module = Math.floor(selected / 32) + 1;
+      const channel = selected % 32;
+      const bzSelf = bzTableGauss(0) * Math.abs(v);
+      const bzTotal = totalBzAt(p.x, p.y);
+      const fMag = forceDensityAt(p.x, p.y);
+
+      selectedInfo.innerHTML =
+        `row=<code>${row}</code>, col=<code>${col}</code><br />` +
+        `id=<code>${selected}</code><br />` +
+        `x=<code>${p.x.toFixed(2)} mm</code>, y=<code>${p.y.toFixed(2)} mm</code><br />` +
+        `state=<code>${v}</code> &rArr; IN_A=<code>${a}</code>, IN_B=<code>${b}</code><br />` +
+        `module=<code>${module}</code>, channel=<code>${channel}</code><br />` +
+        `Bz self=<code>${bzSelf.toFixed(2)} G</code>, total=<code>${bzTotal.toFixed(2)} G</code><br />` +
+        `F=(${formatSci(fMag.fx)}, ${formatSci(fMag.fy)}) N`;
+    }
+
+    function redraw() {
+      syncModeButtons();
+      let stats = { min: 0, max: 0 };
+
+      if (analysisMode) {
+        const grid = computeFieldGrid();
+        stats = { min: grid.min, max: grid.max };
+        lastFieldStats = stats;
+        fieldCanvas.style.visibility = "visible";
+        renderHeatmap(grid);
+        drawContourOverlay(grid);
+        drawFieldScale(grid);
+        drawXYAxes(fctx, fieldCanvas.width, fieldCanvas.height);
+        mctx.clearRect(0, 0, magnetCanvas.width, magnetCanvas.height);
+        magnetCanvas.style.pointerEvents = "none";
+      } else {
+        lastFieldStats = stats;
+        fieldCanvas.style.visibility = "hidden";
+        fctx.clearRect(0, 0, fieldCanvas.width, fieldCanvas.height);
+        drawMagnets();
+        drawXYAxes(mctx, magnetCanvas.width, magnetCanvas.height);
+        magnetCanvas.style.pointerEvents = "auto";
+      }
+
+      renderSummary();
+      renderSelected();
+      renderModelInfo(stats);
+    }
+
+    function nearestMagnet(pxX, pxY) {
+      let best = -1;
+      let bestD2 = Infinity;
+      for (let id = 0; id < TOTAL; id++) {
+        const p = positions[id];
+        const q = mmToPx(p.x, p.y);
+        const dx = pxX - q.x;
+        const dy = pxY - q.y;
+        const d2 = dx * dx + dy * dy;
+        if (d2 < bestD2) {
+          bestD2 = d2;
+          best = id;
+        }
+      }
+      const r = mmToPx(D_MM / 2, 0).x - mmToPx(0, 0).x;
+      return bestD2 <= (r * r * 1.2) ? best : -1;
+    }
+
+    function cycleState(id) {
+      if (id < 0) return;
+      if (state[id] === 0) state[id] = 1;
+      else if (state[id] === 1) state[id] = -1;
+      else state[id] = 0;
+    }
+
+    let isDragging = false;
+    let dragMoved = false;
+    let lastDraggedId = -1;
+
+    magnetCanvas.addEventListener("mousedown", (e) => {
+      if (analysisMode) return;
+      isDragging = true;
+      dragMoved = false;
+      lastDraggedId = -1;
+
+      const rect = magnetCanvas.getBoundingClientRect();
+      const x = (e.clientX - rect.left) * (magnetCanvas.width / rect.width);
+      const y = (e.clientY - rect.top) * (magnetCanvas.height / rect.height);
+      const id = nearestMagnet(x, y);
+      if (id >= 0) {
+        selected = id;
+        cycleState(id);
+        lastDraggedId = id;
+        redraw();
+      }
+    });
+
+    magnetCanvas.addEventListener("mousemove", (e) => {
+      if (analysisMode) {
+        magnetCanvas.style.cursor = "default";
+        return;
+      }
+      const rect = magnetCanvas.getBoundingClientRect();
+      const x = (e.clientX - rect.left) * (magnetCanvas.width / rect.width);
+      const y = (e.clientY - rect.top) * (magnetCanvas.height / rect.height);
+      const id = nearestMagnet(x, y);
+      magnetCanvas.style.cursor = id >= 0 ? "pointer" : "default";
+
+      if (isDragging && id >= 0 && id !== lastDraggedId) {
+        dragMoved = true;
+        selected = id;
+        cycleState(id);
+        lastDraggedId = id;
+        redraw();
+      }
+    });
+
+    magnetCanvas.addEventListener("mouseup", () => {
+      isDragging = false;
+    });
+
+    magnetCanvas.addEventListener("mouseleave", () => {
+      isDragging = false;
+    });
+
+    magnetCanvas.addEventListener("click", (e) => {
+      // mousedown이 이미 처리했으므로 드래그 이동이 있었던 경우만 무시
+      if (dragMoved) {
+        dragMoved = false;
+        return;
+      }
+    });
+
+    document.getElementById("btnClear").addEventListener("click", () => {
+      state.fill(0);
+      selected = -1;
+      redraw();
+    });
+
+    document.getElementById("btnRandom").addEventListener("click", () => {
+      for (let i = 0; i < TOTAL; i++) {
+        const r = Math.random();
+        state[i] = r < 0.33 ? -1 : (r < 0.66 ? 0 : 1);
+      }
+      redraw();
+    });
+
+    btnEdit.addEventListener("click", () => {
+      analysisMode = false;
+      redraw();
+    });
+
+    btnAnalysis.addEventListener("click", () => {
+      analysisMode = true;
+      redraw();
+    });
+
+    document.getElementById("btnExport").addEventListener("click", () => {
+      const { payloadTx } = buildOrderedPayloads();
+      const baseName = normalizeExportBaseName(txExportName ? txExportName.value : "");
+      if (txExportName) txExportName.value = baseName;
+      const rows = [];
+      for (let i = 0; i < payloadTx.length; i += 32) rows.push(payloadTx.slice(i, i + 32).join(","));
+      downloadText(`${baseName}.csv`, rows.join("\n"));
+      updateNextExportNameFrom(baseName);
+    });
+
+    function resizeCanvases() {
+      const wrap = document.getElementById("canvasWrap");
+      const targetWidth = Math.floor(wrap.clientWidth - 36);
+      const w = Math.max(720, targetWidth);
+      const h = Math.round(w * 0.65);
+
+      fieldCanvas.width = w;
+      fieldCanvas.height = h;
+      magnetCanvas.width = w;
+      magnetCanvas.height = h;
+
+      redraw();
+    }
+
+    buildPositions();
+    typesetModelEquation();
+    resizeCanvases();
+    window.addEventListener("resize", resizeCanvases);
+    window.addEventListener("load", typesetModelEquation);
+  </script>
+</body>
+</html>

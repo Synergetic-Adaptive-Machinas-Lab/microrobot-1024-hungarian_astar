@@ -1,0 +1,1818 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>SAM LAB – Electromagnet Controller (1024) + Camera</title>
+<style>
+/* ════════════════════════════════════════════════
+   VS Code High Contrast theme
+════════════════════════════════════════════════ */
+:root {
+  --bg:          #000000;
+  --bg-panel:    #0a0a0a;
+  --bg-input:    #000000;
+  --bg-btn:      #000000;
+  --bg-hover:    #1a1a1a;
+  --bg-canvas:   #000000;
+
+  --border:      #6FC3DF;
+  --border-dim:  #3A5F6F;
+  --border-btn:  #FFFFFF;
+
+  --text:        #FFFFFF;
+  --text-dim:    #C5C5C5;
+  --text-muted:  #858585;
+
+  --accent:      #1AEBFF;   /* HC cyan */
+  --accent2:     #FFFF00;   /* HC yellow */
+  --ok:          #B5CEA8;
+  --err:         #F48771;
+  --warn:        #CCA700;
+
+  --col-pos:     #FF4040;   /* N pole red */
+  --col-neg:     #3A8FFF;   /* S pole blue */
+  --col-off:     #1A1A1A;   /* off cell */
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: Consolas, 'Courier New', monospace;
+  font-size: 13px;
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+  gap: 6px;
+  padding: 6px;
+  border: 1px solid var(--border);
+}
+
+/* ── PANELS ── */
+#col-left   { flex: 0 0 auto; display: flex; flex-direction: column; gap: 6px; }
+#col-center { flex: 0 0 350px; display: flex; flex-direction: column; gap: 6px; overflow-y: auto; }
+#col-right  { flex: 1; min-width: 240px; display: flex; flex-direction: column; gap: 6px; }
+
+.box {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  padding: 10px;
+}
+.box-title {
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 5px;
+  border-bottom: 1px solid var(--border-dim);
+  padding-bottom: 3px;
+}
+
+/* ── CANVAS ── */
+#grid-wrap {
+  background: var(--bg-canvas);
+  border: 1px solid var(--border);
+}
+#grid-canvas { display: block; cursor: crosshair; }
+
+/* ── BUTTONS ── */
+.btn {
+  background: var(--bg-btn);
+  border: 1px solid var(--border-btn);
+  color: var(--text);
+  padding: 4px 10px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 12px;
+  white-space: nowrap;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  outline: none;
+}
+.btn:hover  { background: var(--bg-hover); border-color: var(--accent); color: var(--accent); }
+.btn:focus  { outline: 1px solid var(--accent); }
+.btn.on     { background: var(--bg-hover); border-color: var(--accent); color: var(--accent); }
+.btn.warn   { border-color: var(--warn);   color: var(--warn); }
+.btn.red    { border-color: var(--err);    color: var(--err); }
+.btn:disabled { opacity: 0.3; cursor: default; }
+
+/* ── INPUTS ── */
+input[type=text], input[type=number] {
+  background: var(--bg-input);
+  border: 1px solid var(--border-btn);
+  color: var(--text);
+  padding: 3px 6px;
+  font-family: inherit;
+  font-size: 12px;
+  outline: none;
+}
+input[type=text]:focus,
+input[type=number]:focus { border-color: var(--accent); }
+input[type=number] { -moz-appearance: textfield; }
+input::-webkit-outer-spin-button,
+input::-webkit-inner-spin-button { -webkit-appearance: none; }
+
+/* ── TABS ── */
+.tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); }
+.tab {
+  padding: 5px 16px;
+  background: var(--bg);
+  border: 1px solid var(--border-dim);
+  border-bottom: none;
+  cursor: pointer;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+}
+.tab.active { border-color: var(--border); color: var(--accent); background: var(--bg-panel); }
+.tab-pane   { display: none; }
+.tab-pane.active { display: block; }
+
+/* ── LAYOUT ── */
+.row { display: flex; align-items: center; gap: 6px; margin: 4px 0; flex-wrap: wrap; }
+.sep { border: none; border-top: 1px solid var(--border-dim); margin: 5px 0; }
+
+/* ── STATUS GRID ── */
+.sg { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; font-size: 12px; }
+.sg-k { color: var(--text-muted); }
+.sg-v { color: var(--text-dim); }
+.sg-v.ok   { color: var(--ok); }
+.sg-v.err  { color: var(--err); }
+.sg-v.warn { color: var(--warn); }
+
+/* ── RAW DATA ── */
+#raw-display {
+  font-size: 7px; line-height: 1.3;
+  letter-spacing: 0.2px; margin-top: 6px; font-family: monospace;
+  white-space: pre;
+}
+.rd-off { color: #2a2a2a; }
+.rd-pos { color: #cc3030; }  /* N pole: red */
+.rd-neg { color: #3068cc; }  /* S pole: blue */
+
+/* ── TERMINAL ── */
+#terminal {
+  flex: 1;
+  min-height: 0;  /* ← allows 50/50 flex split with camera panel */
+  background: var(--bg);
+  border: 1px solid var(--border);
+  padding: 8px;
+  overflow-y: auto;
+  font-size: 11px;
+  white-space: pre;
+}
+.t-ok   { color: var(--ok); }
+.t-err  { color: var(--err); }
+.t-info { color: var(--accent); }
+.t-warn { color: var(--warn); }
+.t-def  { color: var(--text-muted); }
+
+/* ── CONNECTION PILL ── */
+#conn-pill {
+  padding: 2px 10px; font-size: 11px;
+  border: 1px solid var(--err); color: var(--err);
+  text-transform: uppercase; letter-spacing: 1px;
+}
+#conn-pill.connected { border-color: var(--accent); color: var(--accent); }
+
+/* ── CSV DROP ZONE ── */
+#csv-drop {
+  border: 1px dashed var(--border-dim);
+  padding: 10px; text-align: center; font-size: 12px;
+  color: var(--text-muted); cursor: pointer; transition: all 0.12s;
+}
+#csv-drop:hover   { border-color: var(--border); color: var(--text-dim); }
+#csv-drop.drag-over { border-color: var(--accent); color: var(--accent); }
+#csv-drop input   { display: none; }
+
+/* scrollbar styling */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--border-dim); }
+::-webkit-scrollbar-thumb:hover { background: var(--border); }
+
+/* ══════════════════════════════
+   CAMERA PANEL (new)
+══════════════════════════════ */
+#cam-panel {
+  flex: 1;
+  min-height: 0;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  position: relative;
+  overflow: hidden;
+}
+#cam-video {
+  width: 100%; height: 100%;
+  object-fit: cover; display: block;
+}
+#cam-placeholder {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 8px; color: var(--text-muted);
+  font-size: 11px; text-transform: uppercase; letter-spacing: 1px;
+}
+#cam-placeholder-icon { font-size: 22px; opacity: 0.4; }
+#cam-status-dot {
+  position: absolute; top: 6px; right: 8px;
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--border-dim);
+  transition: background 0.2s;
+}
+#cam-status-dot.live { background: var(--err); box-shadow: 0 0 5px var(--err); }
+</style>
+</head>
+<body>
+
+<!-- LEFT: GRID -->
+<div id="col-left">
+  <div id="grid-wrap">
+    <canvas id="grid-canvas"></canvas>
+  </div>
+  <div class="box" style="padding:8px 10px;background:#1a0a0e;border-color:#601e2a">
+    <div style="display:flex;align-items:baseline;justify-content:center;gap:14px;margin:6px 0">
+      <span id="pw-cur-display" style="font-size:28px;font-weight:bold;color:var(--accent);letter-spacing:1px">0.000 A</span>
+      <span id="pw-cur-watt"    style="font-size:20px;font-weight:bold;color:var(--text-dim);letter-spacing:1px">0.0 W</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+      <div style="flex:1;background:#1a1a1a;border:1px solid var(--border-dim);height:16px;position:relative;overflow:hidden">
+        <div id="pw-bar-fill" style="height:100%;width:0%;background:var(--accent);transition:width 0.15s,background 0.15s"></div>
+      </div>
+      <span id="pw-bar-pct" style="font-size:12px;color:var(--text-dim);min-width:38px;text-align:right">0%</span>
+    </div>
+    <div style="font-size:10px;color:var(--text-muted);text-align:center">of Max Amp</div>
+  </div>
+</div>
+
+<!-- CENTER: CONTROLS -->
+<div id="col-center">
+  <button class="btn red" id="btn-estop" onclick="emergencyStop()"
+          style="background:#FF2020;border-color:#FF2020;color:#000000;font-weight:bold;letter-spacing:1px;width:100%;padding:8px 0;font-size:16px">
+    STOP
+  </button>
+  <div>
+    <div class="tabs">
+      <div class="tab active" id="tab-manual" onclick="switchTab('manual')">Manual</div>
+      <div class="tab"        id="tab-csv"    onclick="switchTab('csv')">CSV Player</div>
+      <div class="tab"        id="tab-hex"     onclick="switchTab('hex')">Hex Mover</div>
+      <div class="tab"        id="tab-cluster" onclick="switchTab('cluster')">Clusters</div>
+    </div>
+
+    <!-- MANUAL -->
+    <div class="box tab-pane active" id="pane-manual" style="border-top:none">
+
+      <!-- Intensity control (manual only) -->
+      <div class="box-title">Intensity  <span style="font-size:10px;color:var(--text-muted);font-weight:normal">LClick=paint · RClick=erase</span></div>
+      <div class="row" style="margin-bottom:4px">
+        <button class="btn" style="padding:2px 9px;font-size:14px;font-weight:bold;line-height:1" onclick="adjManualIntensity(-1)">−</button>
+        <span id="manual-int-disp" style="font-size:18px;font-weight:bold;color:#FF4040;min-width:32px;text-align:center;letter-spacing:1px">+7</span>
+        <button class="btn" style="padding:2px 9px;font-size:14px;font-weight:bold;line-height:1" onclick="adjManualIntensity(+1)">+</button>
+        <input type="range" id="manual-int-slider" min="-7" max="7" value="7" step="1"
+               style="flex:1;accent-color:var(--accent)"
+               oninput="setManualIntensity(parseInt(this.value))">
+        <span style="font-size:11px;color:var(--text-muted);min-width:34px;text-align:right">
+          <span id="manual-int-pct">100</span>%
+        </span>
+      </div>
+      <hr class="sep">
+
+      <div class="box-title">Debug (ID 1–1024)</div>
+      <div class="row">
+        <input type="number" id="debug-id" value="1" min="1" max="1024" style="width:76px">
+        <button class="btn" onclick="applyDebugById()">Go</button>
+        <button class="btn" onclick="debugNext()">Next</button>
+      </div>
+      <hr class="sep">
+      <div style="color:var(--text-muted);font-size:11px;text-transform:uppercase;letter-spacing:0.5px">
+        Effective TX <span style="color:var(--border-dim)">(K-scaled, N=<span style="color:#cc3030">red</span> S=<span style="color:#3068cc">blue</span> ·=off)</span>
+      </div>
+      <div id="raw-display"></div>
+    </div>
+
+    <!-- CSV PLAYER -->
+    <div class="box tab-pane" id="pane-csv" style="border-top:none">
+      <div class="box-title">CSV to Magnet</div>
+      <div id="csv-drop"
+           onclick="document.getElementById('csv-input').click()"
+           ondragover="onDragOver(event)"
+           ondragleave="onDragLeave(event)"
+           ondrop="onDrop(event)">
+        <input type="file" id="csv-input" accept=".csv" multiple onchange="onFileSelect(event)">
+        Drop CSV files here or click to browse<br>
+        <span style="font-size:10px">(magnets_i.csv sorted numerically, or flat 1024-per-row)</span>
+      </div>
+      <div id="csv-file-info" style="font-size:11px;color:var(--text-muted);margin:4px 0"></div>
+
+      <div class="row">
+        <button class="btn"    id="btn-play"  onclick="csvPlay()">Play</button>
+        <button class="btn red"               onclick="csvStop()">Stop</button>
+        <button class="btn"                   onclick="csvPrev()">Prev</button>
+        <button class="btn"                   onclick="csvNext()">Next</button>
+      </div>
+      <div class="row">
+        <button class="btn on"  id="btn-loop"    onclick="toggleLoop()">Loop ON</button>
+        <button class="btn"     id="btn-reverse" onclick="toggleReverse()">Reverse OFF</button>
+        <button class="btn"     id="btn-invert"  onclick="toggleInvert()">Invert OFF</button>
+      </div>
+      <div class="row">
+        <span style="color:var(--text-muted);font-size:12px">s/frame</span>
+        <button class="btn" style="padding:3px 8px" onmousedown="startHoldAdj(-0.01)" onmouseup="stopHoldAdj()" onmouseleave="stopHoldAdj()">–</button>
+        <span id="hold-disp" style="font-size:12px;min-width:52px;text-align:center;color:var(--accent)">0.200</span>
+        <button class="btn" style="padding:3px 8px" onmousedown="startHoldAdj(+0.01)" onmouseup="stopHoldAdj()" onmouseleave="stopHoldAdj()">+</button>
+      </div>
+      <hr class="sep">
+      <div class="sg">
+        <span class="sg-k">Frames</span>    <span class="sg-v" id="csv-total">0</span>
+        <span class="sg-k">Current</span>   <span class="sg-v" id="csv-cur">–</span>
+        <span class="sg-k">Last Sent</span> <span class="sg-v" id="csv-last">–</span>
+        <span class="sg-k">Status</span>    <span class="sg-v" id="csv-status">READY</span>
+        <span class="sg-k">SEQ</span>       <span class="sg-v" id="csv-seq">0</span>
+        <span class="sg-k">Sent</span>      <span class="sg-v" id="csv-sent">0</span>
+        <span class="sg-k">RTT (μs)</span> <span class="sg-v" id="csv-rtt">–</span>
+      </div>
+      <div id="csv-error" style="color:var(--err);font-size:11px;margin-top:4px"></div>
+    </div>
+
+    <!-- HEX MOVER -->
+    <div class="box tab-pane" id="pane-hex" style="border-top:none">
+      <div class="box-title">Hex Unit Mover</div>
+
+      <!-- Activate + Pole -->
+      <div class="row">
+        <button class="btn" id="btn-hex-active" onclick="hexToggleActive()">Activate</button>
+        <button class="btn" id="btn-hex-pole"   onclick="hexTogglePole()">N Pole (+)</button>
+      </div>
+
+      <hr class="sep">
+
+      <!-- WASD pad -->
+      <div style="display:flex;flex-direction:column;align-items:center;gap:3px;margin:6px 0">
+        <button class="btn" style="width:52px" onclick="moveHex(-1,0)">W ↑</button>
+        <div style="display:flex;gap:3px">
+          <button class="btn" style="width:52px" onclick="moveHex(0,-1)">A ←</button>
+          <button class="btn" style="width:52px" onclick="moveHex(+1,0)">S ↓</button>
+          <button class="btn" style="width:52px" onclick="moveHex(0,+1)">D →</button>
+        </div>
+      </div>
+
+      <hr class="sep">
+
+      <div class="sg">
+        <span class="sg-k">Center (r,c)</span><span class="sg-v" id="hex-pos">15, 15</span>
+        <span class="sg-k">Pole</span>        <span class="sg-v" id="hex-pole-disp">N (+7)</span>
+        <span class="sg-k">Status</span>      <span class="sg-v" id="hex-status">INACTIVE</span>
+      </div>
+
+      <hr class="sep">
+      <div style="color:var(--text-muted);font-size:11px;line-height:1.7">
+        Unit = 6 hex neighbors around center cell.<br>
+        Center (yellow dot) moves; 6 cells follow.<br>
+        WASD keys work when no input is focused.<br>
+        Max Amp limit applies automatically.
+      </div>
+    </div>
+
+    <!-- CLUSTER MOVER -->
+    <div class="box tab-pane" id="pane-cluster" style="border-top:none">
+      <div class="box-title">Cluster Mover</div>
+
+      <!-- New / Save / Cancel -->
+      <div class="row" style="gap:6px">
+        <button class="btn" id="btn-cl-new"    onclick="clusterStartSelect()">New Cluster</button>
+        <button class="btn" id="btn-cl-save"   onclick="clusterSave()"   disabled>Save</button>
+        <button class="btn" id="btn-cl-cancel" onclick="clusterCancelSelect()" disabled>Cancel</button>
+      </div>
+      <div id="cl-hint" style="font-size:11px;color:var(--text-muted);margin:4px 0 2px">
+        Up to 3 clusters. Click [New Cluster] to begin.
+      </div>
+
+      <hr class="sep">
+
+      <!-- Cluster list -->
+      <div id="cl-list">
+        <div style="color:var(--text-muted);font-size:11px">No clusters yet.</div>
+      </div>
+
+      <hr class="sep">
+
+      <!-- WASD pad -->
+      <div style="display:flex;flex-direction:column;align-items:center;gap:3px;margin:6px 0">
+        <button class="btn" style="width:52px" onclick="clusterMoveActive(-1, 0)">W ↑</button>
+        <div style="display:flex;gap:3px">
+          <button class="btn" style="width:52px" onclick="clusterMoveActive( 0,-1)">A ←</button>
+          <button class="btn" style="width:52px" onclick="clusterMoveActive(+1, 0)">S ↓</button>
+          <button class="btn" style="width:52px" onclick="clusterMoveActive( 0,+1)">D →</button>
+        </div>
+      </div>
+
+      <hr class="sep">
+      <div style="color:var(--text-muted);font-size:11px;line-height:1.7">
+        1. Paint magnets on grid as usual.<br>
+        2. [New Cluster] → click/drag cells to select.<br>
+        3. [Save] → cluster captured (up to 3).<br>
+        4. Click a cluster row to activate it.<br>
+        5. WASD moves the active cluster.<br>
+        Right-click on grid to deselect cells.
+      </div>
+    </div>
+
+  </div>
+
+  <!-- System status -->
+  <div class="box" style="background:#0d1017;border-color:#4a6080">
+    <div class="box-title" style="color:#FFC66D;border-color:#2d4060">System Status</div>
+    <div class="sg">
+      <span class="sg-k">Port</span>    <span class="sg-v" id="sys-port">–</span>
+      <span class="sg-k">Baud</span>    <span class="sg-v" id="sys-baud">921600</span>
+      <span class="sg-k">Hz limit</span><span class="sg-v" id="sys-hz">15</span>
+      <span class="sg-k">SEQ</span>     <span class="sg-v" id="sys-seq">0</span>
+      <span class="sg-k">bad_ack</span><span class="sg-v" id="sys-badack">0</span>
+      <span class="sg-k">RTT (μs)</span><span class="sg-v" id="sys-rtt">–</span>
+    </div>
+  </div>
+
+  <!-- Power Monitor -->
+  <div class="box" style="background:#0d1017;border-color:#4a6080">
+    <div class="box-title" style="color:#FFC66D;border-color:#2d4060">Power Monitor</div>
+    <div class="sg">
+      <span class="sg-k">Active</span>       <span class="sg-v" id="pw-count">0</span>
+    </div>
+    <hr class="sep">
+    <div class="row">
+      <span style="color:var(--text-muted);font-size:12px">Max Amp</span>
+      <input type="number" id="inp-maxamp" value="10" min="0.1" step="0.5" style="width:70px"
+             oninput="updatePowerDisplay()">
+      <span style="color:var(--text-muted);font-size:12px">A</span>
+    </div>
+    <div id="pw-warn" style="font-size:11px;margin-top:4px;min-height:14px"></div>
+  </div>
+</div>
+
+<!-- RIGHT: CONNECTION + TERMINAL + CAMERA -->
+<div id="col-right">
+  <div class="box" style="padding:7px 10px;background:#1e1e1e;border-color:#2d5a2d">
+    <div class="row" style="gap:8px;justify-content:space-between;flex-wrap:wrap">
+      <div class="row">
+        <button class="btn" id="btn-connect" onclick="toggleConnect()" style="border-color:#3a7a3a;color:#7abf7a">Serial Connect</button>
+        <span id="conn-pill">DISCONNECTED</span>
+      </div>
+      <div class="row" style="gap:6px">
+        <span style="color:var(--text-muted);font-size:12px">Baud</span>
+        <input type="number" id="inp-baud"  value="921600" style="width:88px">
+        <span style="color:var(--text-muted);font-size:12px">Hz</span>
+        <input type="number" id="inp-hz"    value="15" min="1" max="200" style="width:48px">
+        <span style="color:var(--text-muted);font-size:12px">ACK(s)</span>
+        <input type="number" id="inp-ack"   value="1.0" step="0.1" min="0.1" style="width:52px">
+        <span style="color:var(--text-muted);font-size:12px">print/N</span>
+        <input type="number" id="inp-print" value="1" min="1" style="width:44px">
+      </div>
+    </div>
+  </div>
+  <div class="box" style="padding:7px 10px;background:#1e1e1e;border-color:#2d5a2d">
+    <div class="row" style="gap:6px;flex-wrap:wrap">
+      <button class="btn" id="btn-cam-connect" style="border-color:#3a7a3a;color:#7abf7a">Cam Connect</button>
+      <span id="cam-pill" style="padding:2px 10px;font-size:11px;border:1px solid #3A5F6F;color:#858585;text-transform:uppercase;letter-spacing:1px">NO CAM</span>
+      <button class="btn" id="btn-cam-record" disabled style="border-color:#F48771;color:#F48771">Record</button>
+      <span id="rec-pill" style="padding:2px 10px;font-size:11px;border:1px solid #3A5F6F;color:#858585;text-transform:uppercase;letter-spacing:1px;display:none">● REC</span>
+    </div>
+  </div>
+
+  <div style="color:var(--text-muted);font-size:11px;text-transform:uppercase;letter-spacing:1px;padding-left:2px">
+    Terminal Output
+  </div>
+  <div id="terminal"></div>
+
+  <!-- ── CAMERA PANEL (new) ── -->
+  <div style="color:var(--text-muted);font-size:11px;text-transform:uppercase;letter-spacing:1px;padding-left:2px">
+    Camera Feed
+  </div>
+  <div id="cam-panel">
+    <video id="cam-video" autoplay playsinline muted></video>
+    <div id="cam-placeholder">
+      <span id="cam-placeholder-icon">⊙</span>
+      <span id="cam-placeholder-text">No Camera · Connect to start</span>
+    </div>
+    <div id="cam-status-dot"></div>
+  </div>
+</div>
+
+<script>
+'use strict';
+
+// ─────────────────────────────────────────────────
+//  CONSTANTS
+// ─────────────────────────────────────────────────
+const ROWS = 32, COLS = 32, N_MAG = 1024;
+const MAX_INT   = 7;
+const FRAME_MAGIC = 0x55AA;
+const HDR_BYTES  = 6, DATA_BYTES = 512, CRC_BYTES = 2;
+const FRAME_BYTES = HDR_BYTES + DATA_BYTES + CRC_BYTES; // 520
+
+// ─────────────────────────────────────────────────
+//  SHARED BUFFER
+// ─────────────────────────────────────────────────
+const magnetData = new Int8Array(N_MAG);
+
+// ─────────────────────────────────────────────────
+//  SERIAL / STREAM STATE
+// ─────────────────────────────────────────────────
+let serialPort = null, serialWriter = null, serialReader = null;
+let isConnected = false, streamRunning = false;
+let serialWorker = null, serialWorkerBlobUrl = null;
+let HZ_LIMIT = 15, ACK_TIMEOUT_MS = 1000, BAUD_RATE = 921600, PRINT_EVERY = 1;
+let globalSeq = 0, badAck = 0, lastRttUs = 0;
+let ackState = 'WAIT_AA', ackSeqBytes = [], pendingAck = null;
+
+// ─────────────────────────────────────────────────
+//  MANUAL STATE
+// ─────────────────────────────────────────────────
+let gridStage = new Int8Array(N_MAG);
+let updateId = 0, lastAction = 'READY', debugIndex = 1;
+let manualIntensity = 7;
+
+function adjManualIntensity(d) { setManualIntensity(manualIntensity + d); }
+function setManualIntensity(v) {
+  manualIntensity = Math.max(-7, Math.min(7, v));
+  const disp = document.getElementById('manual-int-disp');
+  disp.textContent = (manualIntensity > 0 ? '+' : '') + manualIntensity;
+  disp.style.color  = manualIntensity > 0 ? '#FF4040'
+                    : manualIntensity < 0 ? '#3A8FFF' : 'var(--text-muted)';
+  document.getElementById('manual-int-slider').value    = manualIntensity;
+  document.getElementById('manual-int-pct').textContent = Math.round(Math.abs(manualIntensity) / 7 * 100);
+
+  // Live-update all currently-on cells: preserve polarity, apply new magnitude
+  const mag = Math.abs(manualIntensity);
+  let changed = false;
+  for (let i = 0; i < ROWS; i++) {
+    for (let j = 0; j < COLS; j++) {
+      const cur = gridStage[i*COLS+j];
+      if (cur === 0) continue;
+      const newVal = (cur > 0 ? 1 : -1) * mag;
+      gridStage[i*COLS+j] = newVal;
+      magnetData[ijToId(i,j)-1] = newVal;
+      changed = true;
+    }
+  }
+  if (changed) { notifyWorker(true); drawGrid(); }
+}
+
+// ─────────────────────────────────────────────────
+//  CSV PLAYER STATE
+// ─────────────────────────────────────────────────
+let csvFrames = [], csvFrameIdx = 0, csvPlaying = false;
+let csvLoop = true, csvNoUsb = false, csvHoldS = 0.200;
+let csvReverse = false, csvInvert = false;
+let csvSeq = 0, csvSent = 0, csvLastSentIdx = -1;
+let csvLastStatus = 'READY', csvLastError = '', csvLastRttUs = 0;
+let csvTriggerOnce = false, csvNextSendAt = 0, csvLoopActive = false;
+
+// ─────────────────────────────────────────────────
+//  CANVAS — CIRCLES with odd-row offset
+// ─────────────────────────────────────────────────
+const canvas = document.getElementById('grid-canvas');
+const ctx    = canvas.getContext('2d');
+let TILE = 17;
+
+function initCanvas() {
+  const availH = window.innerHeight - 120;
+  const availW = window.innerWidth  * 0.46;
+  TILE = Math.max(11, Math.floor(Math.min(availH / ROWS, availW / (COLS + 0.6))));
+  canvas.width  = COLS * TILE + Math.ceil(TILE / 2) + 24;
+  canvas.height = ROWS * TILE + 32;
+  drawGrid();
+}
+
+// ID mapping (same as Python)
+function idToIj(id1)  { const idx=id1-1; return [(ROWS-1)-(idx%ROWS), Math.floor(idx/ROWS)]; }
+function ijToId(i, j) { return j*ROWS + (ROWS-1-i) + 1; }
+
+// Pixel center of circle (odd rows offset by TILE/2)
+function ijToCenter(i, j) {
+  const offset = (i % 2 === 1) ? Math.floor(TILE / 2) : 0;
+  return [12 + j*TILE + Math.floor(TILE/2) + offset,
+           8 + i*TILE + Math.floor(TILE/2)];
+}
+
+// Hit-test: which (i,j) does pixel (mx,my) land on?
+function xyToIj(mx, my) {
+  const i = Math.floor((my - 8) / TILE);
+  if (i < 0 || i >= ROWS) return [null, null];
+  const offset = (i % 2 === 1) ? Math.floor(TILE / 2) : 0;
+  const j = Math.floor((mx - 12 - offset) / TILE);
+  if (j < 0 || j >= COLS) return [null, null];
+  return [i, j];
+}
+
+// HC-style colors: dim off, vivid on
+function colorForValue(v) {
+  if (v === 0) return '#1A1A1A';
+  const t = Math.min(1.0, Math.abs(v) / MAX_INT);
+  if (v > 0) {
+    // red: from dim (#551010) to full (#FF3030)
+    const r = Math.round(85  + (255 - 85)  * t);
+    const g = Math.round(16  + (48  - 16)  * t);
+    const b = Math.round(16  + (48  - 16)  * t);
+    return `rgb(${r},${g},${b})`;
+  } else {
+    // blue: from dim (#101055) to full (#3080FF)
+    const r = Math.round(16  + (48  - 16)  * t);
+    const g = Math.round(16  + (128 - 16)  * t);
+    const b = Math.round(85  + (255 - 85)  * t);
+    return `rgb(${r},${g},${b})`;
+  }
+}
+
+function drawGrid() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  const r = TILE / 2;  // radius = TILE/2 → circles touch (diameter = TILE)
+
+  for (let i = 0; i < ROWS; i++) {
+    for (let j = 0; j < COLS; j++) {
+      const id = ijToId(i, j);
+      const v  = magnetData[id - 1];
+      const [cx, cy] = ijToCenter(i, j);
+
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.fillStyle = colorForValue(v);
+      ctx.fill();
+
+      // HC-style: draw a crisp ring for active cells
+      if (v !== 0) {
+        ctx.strokeStyle = v > 0 ? '#FF6060' : '#60A0FF';
+        ctx.lineWidth   = 1;
+        ctx.stroke();
+      }
+    }
+  }
+
+  // Hex unit highlight (drawn over circles)
+  if (hexActive) {
+    const ringR = TILE / 2 - 1.5;
+    const ringCol = hexPole > 0 ? '#FF8080' : '#80A0FF';
+    ctx.lineWidth = 2;
+    // Ring: 6 neighbor cells
+    for (const [nr, nc] of hexGetCells(hexAnchorRow, hexAnchorCol)) {
+      const [cx, cy] = ijToCenter(nr, nc);
+      ctx.beginPath();
+      ctx.arc(cx, cy, ringR, 0, Math.PI * 2);
+      ctx.strokeStyle = ringCol;
+      ctx.stroke();
+    }
+    // Center: yellow dot + label
+    const [ccx, ccy] = ijToCenter(hexAnchorRow, hexAnchorCol);
+    ctx.fillStyle = '#FFFF00';
+    ctx.beginPath();
+    ctx.arc(ccx, ccy, 3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.font = 'bold 10px Consolas';
+    ctx.fillStyle = '#FFFF00';
+    ctx.fillText(`C(${hexAnchorRow},${hexAnchorCol})`, ccx + 5, ccy - TILE / 2 - 2);
+  }
+
+  // ── Cluster overlays ──
+  const r0 = TILE / 2 - 1.5;
+  for (let ci = 0; ci < clusters.length; ci++) {
+    const cl = clusters[ci];
+    const isActive = ci === activeClusterIdx;
+    ctx.strokeStyle = cl.color;
+    ctx.lineWidth = isActive ? 2.5 : 1.5;
+    for (const cell of cl.cells) {
+      const r = cl.anchorRow + cell.dr, c = cl.anchorCol + cell.dc;
+      if (r < 0 || r >= ROWS || c < 0 || c >= COLS) continue;
+      const [px, py] = ijToCenter(r, c);
+      ctx.beginPath(); ctx.arc(px, py, r0, 0, Math.PI * 2); ctx.stroke();
+    }
+    if (isActive) {
+      const [px, py] = ijToCenter(cl.anchorRow, cl.anchorCol);
+      ctx.fillStyle = cl.color;
+      ctx.beginPath(); ctx.arc(px, py, 3.5, 0, Math.PI * 2); ctx.fill();
+      ctx.font = 'bold 10px Consolas'; ctx.fillStyle = cl.color;
+      ctx.fillText(`CL${ci+1}(${cl.anchorRow},${cl.anchorCol})`, px + 5, py - TILE / 2 - 2);
+    }
+  }
+
+  // ── Selection-mode pending cells (yellow dashed outline) ──
+  if (clusterSelecting) {
+    ctx.strokeStyle = '#FFFF00'; ctx.lineWidth = 2;
+    ctx.setLineDash([3, 3]);
+    for (const key of clusterPending) {
+      const [ri, ci2] = key.split(',').map(Number);
+      const [px, py] = ijToCenter(ri, ci2);
+      ctx.beginPath(); ctx.arc(px, py, r0, 0, Math.PI * 2); ctx.stroke();
+    }
+    ctx.setLineDash([]);
+  }
+
+  // Axis text
+  const axY = 8 + ROWS * TILE + 14;
+  ctx.fillStyle = '#858585';
+  ctx.font = '11px Consolas';
+  ctx.fillText('x →   ↑ y   World frame', 12, axY);
+
+  updateStatusBar();
+  updateRawDisplay();
+}
+
+function updateStatusBar() {
+  updatePowerDisplay();
+}
+
+function updateRawDisplay() {
+  // Show the EFFECTIVE data (K-scaled) = what's actually transmitted
+  // Direction: N-pole positive (red), S-pole negative (blue), off (dark)
+  const sendData = applyPowerScale(magnetData);
+  const parts = [];
+  for (let row = 0; row < ROWS; row++) {
+    for (let col = 0; col < COLS; col++) {
+      const v = sendData[row * COLS + col];
+      if (v === 0) {
+        parts.push('<span class="rd-off">\u00B7</span>');   // · dot
+      } else if (v > 0) {
+        parts.push(`<span class="rd-pos">${v}</span>`);
+      } else {
+        parts.push(`<span class="rd-neg">${Math.abs(v)}</span>`);
+      }
+    }
+    parts.push('\n');
+  }
+  document.getElementById('raw-display').innerHTML = parts.join('');
+}
+
+// ─────────────────────────────────────────────────
+//  MOUSE
+// ─────────────────────────────────────────────────
+let mouseHeld = false, mouseBtn = 0, lastPaintedIj = [null, null];
+
+canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+canvas.addEventListener('mousedown', e => {
+  e.preventDefault();
+  mouseHeld = true; mouseBtn = e.button;
+  const rc = canvas.getBoundingClientRect();
+  const [i, j] = xyToIj(e.clientX - rc.left, e.clientY - rc.top);
+  if (i === null) return;
+  if (clusterSelecting) {
+    const key = `${i},${j}`;
+    if (e.button === 0) { clusterPending.has(key) ? clusterPending.delete(key) : clusterPending.add(key); }
+    else if (e.button === 2) { clusterPending.delete(key); }
+    lastPaintedIj = [i, j]; drawGrid(); return;
+  }
+  if (e.button === 0) gridStage[i*COLS+j] = manualIntensity;
+  if (e.button === 2) gridStage[i*COLS+j] = 0;
+  lastPaintedIj = [i, j];
+  commitGrid();
+});
+
+canvas.addEventListener('mousemove', e => {
+  if (!mouseHeld) return;
+  const rc = canvas.getBoundingClientRect();
+  const [i, j] = xyToIj(e.clientX - rc.left, e.clientY - rc.top);
+  if (i === null || (i === lastPaintedIj[0] && j === lastPaintedIj[1])) return;
+  if (clusterSelecting) {
+    const key = `${i},${j}`;
+    if (mouseBtn === 0) clusterPending.add(key);
+    else if (mouseBtn === 2) clusterPending.delete(key);
+    lastPaintedIj = [i, j]; drawGrid(); return;
+  }
+  if (mouseBtn === 0) gridStage[i*COLS+j] = manualIntensity;
+  if (mouseBtn === 2) gridStage[i*COLS+j] = 0;
+  lastPaintedIj = [i, j];
+  commitGrid();
+});
+
+window.addEventListener('mouseup', () => { mouseHeld = false; lastPaintedIj = [null, null]; });
+
+function commitGrid() {
+  for (let i = 0; i < ROWS; i++)
+    for (let j = 0; j < COLS; j++)
+      magnetData[ijToId(i,j)-1] = gridStage[i*COLS+j];
+  // Hex layer is independent — always reapply on top
+  if (hexActive) hexWriteBuffer(hexAnchorRow, hexAnchorCol);
+  notifyWorker(true);
+  updateId++; drawGrid();
+}
+
+function syncGridFromBuffer() {
+  for (let i = 0; i < ROWS; i++)
+    for (let j = 0; j < COLS; j++)
+      gridStage[i*COLS+j] = magnetData[ijToId(i,j)-1];
+}
+
+// ─────────────────────────────────────────────────
+//  MANUAL ACTIONS
+// ─────────────────────────────────────────────────
+function sendPattern()   { commitGrid(); lastAction = 'PATTERN_SENT'; updateStatusBar(); }
+
+function applyStop() {
+  gridStage.fill(0); magnetData.fill(0);
+  // Deactivate hex so commitGrid() doesn't re-apply hex cells on top
+  if (hexActive) {
+    hexActive = false;
+    const btn = document.getElementById('btn-hex-active');
+    btn.textContent = 'Activate'; btn.classList.remove('on');
+    updateHexDisplay();
+  }
+  notifyWorker(true);
+  updateId++; lastAction = 'STOP'; drawGrid();
+}
+
+function applyDebugById(id) {
+  if (id === undefined) id = parseInt(document.getElementById('debug-id').value) || 1;
+  id = Math.max(1, Math.min(N_MAG, id));
+  document.getElementById('debug-id').value = id;
+  debugIndex = id;
+  gridStage.fill(0); magnetData.fill(0);
+  magnetData[id-1] = manualIntensity;
+  const [r,c] = idToIj(id); gridStage[r*COLS+c] = manualIntensity;
+  notifyWorker(true);
+  updateId++; lastAction = `DEBUG_ID_${id}`; drawGrid();
+}
+
+function debugNext() { debugIndex = (debugIndex % N_MAG) + 1; applyDebugById(debugIndex); }
+
+// ─────────────────────────────────────────────────
+//  TABS
+// ─────────────────────────────────────────────────
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+  document.getElementById(`tab-${name}`).classList.add('active');
+  document.getElementById(`pane-${name}`).classList.add('active');
+  if (name === 'hex') updateHexDisplay();
+}
+
+// ─────────────────────────────────────────────────
+//  CSV PLAYER
+// ─────────────────────────────────────────────────
+function parseCsvContent(text) {
+  const tokens = [];
+  for (const raw of text.split('\n')) {
+    const line = raw.trim();
+    if (!line || line.startsWith('#')) continue;
+    tokens.push(...line.split(/[,;\s]+/).filter(t => t !== ''));
+  }
+  if (!tokens.length) throw new Error('No data found');
+  if (tokens.length % N_MAG !== 0) throw new Error(`Token count ${tokens.length} not multiple of ${N_MAG}`);
+  const frames = [];
+  for (let f = 0; f < tokens.length / N_MAG; f++) {
+    const arr = new Int8Array(N_MAG);
+    for (let i = 0; i < N_MAG; i++)
+      arr[i] = Math.max(-7, Math.min(7, Math.round(parseFloat(tokens[f*N_MAG+i]))));
+    frames.push(arr);
+  }
+  return frames;
+}
+
+function naturalSortKey(name) { return name.replace(/(\d+)/g, n => n.padStart(10,'0')); }
+
+async function loadFiles(fileList) {
+  const files = Array.from(fileList)
+    .filter(f => f.name.toLowerCase().endsWith('.csv'))
+    .sort((a, b) => naturalSortKey(a.name) < naturalSortKey(b.name) ? -1 : 1);
+  if (!files.length) { termLog('[CSV] No .csv files found', 'warn'); return; }
+  const allFrames = [];
+  for (const file of files) {
+    try {
+      const frames = parseCsvContent(await file.text());
+      allFrames.push(...frames);
+      termLog(`[CSV] ${file.name} → ${frames.length} frame(s)`, 'info');
+    } catch(e) { termLog(`[CSV] ERROR ${file.name}: ${e.message}`, 'err'); }
+  }
+  csvFrames = allFrames; csvFrameIdx = 0; csvPlaying = false;
+  csvSent = 0; csvSeq = 0; csvLastSentIdx = -1; csvLastError = '';
+  csvLastStatus = `LOADED ${allFrames.length} frames from ${files.length} file(s)`;
+  const btn = document.getElementById('btn-play');
+  btn.textContent = 'Play'; btn.classList.remove('on');
+  document.getElementById('csv-file-info').textContent =
+    `${files.length} file(s) — ${allFrames.length} frame(s) total`;
+  updateCsvStats();
+  termLog(`[CSV] Ready: ${allFrames.length} frames`, 'ok');
+}
+
+function onFileSelect(e) { loadFiles(e.target.files); }
+function onDragOver(e)   { e.preventDefault(); document.getElementById('csv-drop').classList.add('drag-over'); }
+function onDragLeave()   { document.getElementById('csv-drop').classList.remove('drag-over'); }
+function onDrop(e)       { e.preventDefault(); document.getElementById('csv-drop').classList.remove('drag-over'); loadFiles(e.dataTransfer.files); }
+
+function csvPlay() {
+  if (!csvFrames.length) { termLog('[CSV] No frames loaded', 'warn'); return; }
+  csvPlaying = !csvPlaying;
+  const btn = document.getElementById('btn-play');
+  if (csvPlaying) {
+    csvNextSendAt = performance.now(); csvLastStatus = 'PLAY';
+    btn.textContent = 'Pause'; btn.classList.add('on');
+    startCsvScheduler();
+  } else {
+    csvLastStatus = 'PAUSE'; btn.textContent = 'Play'; btn.classList.remove('on');
+  }
+  updateCsvStats();
+}
+
+function csvStop() {
+  csvPlaying = false; csvFrameIdx = 0; csvLastStatus = 'STOP';
+  document.getElementById('btn-play').textContent = 'Play';
+  document.getElementById('btn-play').classList.remove('on');
+  updateCsvStats();
+}
+
+function csvPrev() {
+  if (!csvFrames.length) return;
+  csvPlaying = false; document.getElementById('btn-play').textContent = 'Play';
+  document.getElementById('btn-play').classList.remove('on');
+  csvFrameIdx = (csvFrameIdx - 1 + csvFrames.length) % csvFrames.length;
+  applyFrame(csvFrames[csvFrameIdx]); csvLastStatus = 'STEP_PREV'; updateCsvStats();
+}
+
+function csvNext() {
+  if (!csvFrames.length) return;
+  csvPlaying = false; document.getElementById('btn-play').textContent = 'Play';
+  document.getElementById('btn-play').classList.remove('on');
+  csvFrameIdx = (csvFrameIdx + 1) % csvFrames.length;
+  applyFrame(csvFrames[csvFrameIdx]); csvLastStatus = 'STEP_NEXT'; updateCsvStats();
+}
+
+
+function toggleLoop() {
+  csvLoop = !csvLoop;
+  const btn = document.getElementById('btn-loop');
+  btn.textContent = csvLoop ? 'Loop ON' : 'Loop OFF';
+  btn.classList.toggle('on', csvLoop);
+}
+
+function toggleReverse() {
+  csvReverse = !csvReverse;
+  const btn = document.getElementById('btn-reverse');
+  btn.textContent = csvReverse ? 'Reverse ON' : 'Reverse OFF';
+  btn.classList.toggle('on', csvReverse);
+}
+
+function toggleInvert() {
+  csvInvert = !csvInvert;
+  const btn = document.getElementById('btn-invert');
+  btn.textContent = csvInvert ? 'Invert ON' : 'Invert OFF';
+  btn.classList.toggle('on', csvInvert);
+}
+
+
+let _holdAdjTimer = null;
+
+function startHoldAdj(d) {
+  adjHoldStep(d);
+  _holdAdjTimer = setInterval(() => adjHoldStep(d), 80);
+}
+
+function stopHoldAdj() {
+  clearInterval(_holdAdjTimer);
+  _holdAdjTimer = null;
+}
+
+function adjHoldStep(d) {
+  csvHoldS = Math.max(0.01, Math.min(10.0, csvHoldS + d));
+  document.getElementById('hold-disp').textContent = csvHoldS.toFixed(3);
+}
+
+function applyFrame(frame) {
+  magnetData.set(frame); syncGridFromBuffer();
+  // Hex layer is independent — always reapply on top
+  if (hexActive) hexWriteBuffer(hexAnchorRow, hexAnchorCol);
+  notifyWorker(false);
+  lastAction = `CSV_F${csvFrameIdx+1}`; updateId++; drawGrid();
+}
+
+function updateCsvStats() {
+  document.getElementById('csv-total').textContent  = csvFrames.length;
+  document.getElementById('csv-cur').textContent    = csvFrames.length ? `${csvFrameIdx+1}/${csvFrames.length}` : '–';
+  document.getElementById('csv-last').textContent   = csvLastSentIdx >= 0 ? csvLastSentIdx+1 : '–';
+  document.getElementById('csv-status').textContent = csvLastStatus;
+  document.getElementById('csv-seq').textContent    = csvSeq;
+  document.getElementById('csv-sent').textContent   = csvSent;
+  document.getElementById('csv-rtt').textContent    = csvLastRttUs > 0 ? csvLastRttUs.toFixed(1) : '–';
+  document.getElementById('csv-error').textContent  = csvLastError ? `ERROR: ${csvLastError}` : '';
+}
+
+async function startCsvScheduler() {
+  if (csvLoopActive) return;
+  csvLoopActive = true;
+  while (true) {
+    const now = performance.now();
+    let shouldSend = false;
+    if (csvTriggerOnce) { shouldSend = true; csvTriggerOnce = false; }
+    else if (csvPlaying && now >= csvNextSendAt) { shouldSend = true; }
+    if (!shouldSend) {
+      if (!csvPlaying && !csvTriggerOnce) break;
+      await sleep(3); continue;
+    }
+    if (!csvFrames.length) break;
+    const idx = Math.max(0, Math.min(csvFrames.length-1, csvFrameIdx));
+    const rawFrame = csvFrames[idx];
+    const frame = csvInvert ? rawFrame.map(v => -v) : rawFrame;
+    applyFrame(frame);
+    // streamLoop is the sole serial sender — CSV scheduler only updates magnetData
+    const statusTxt = isConnected ? 'QUEUED_TX' : 'NO_SERIAL';
+    if (!isConnected) { csvLastError = 'Not connected'; }
+    else { csvLastError = ''; }
+    const rttUs = 0;
+    csvSent++; csvLastSentIdx = idx; csvLastStatus = statusTxt; csvLastRttUs = rttUs;
+    if (csvPlaying) {
+      if (!csvReverse) {
+        if (idx+1 < csvFrames.length) { csvFrameIdx = idx+1; }
+        else if (csvLoop) { csvFrameIdx = 0; }
+        else { csvPlaying = false; document.getElementById('btn-play').textContent = 'Play'; document.getElementById('btn-play').classList.remove('on'); }
+      } else {
+        if (idx-1 >= 0) { csvFrameIdx = idx-1; }
+        else if (csvLoop) { csvFrameIdx = csvFrames.length-1; }
+        else { csvPlaying = false; document.getElementById('btn-play').textContent = 'Play'; document.getElementById('btn-play').classList.remove('on'); }
+      }
+      csvNextSendAt = performance.now() + csvHoldS*1000;
+    }
+    updateCsvStats();
+  }
+  csvLoopActive = false;
+}
+
+// ─────────────────────────────────────────────────
+//  HEX UNIT MOVER
+//  Unit = 6 magnets in a 2×3 block (3 rows × 2 cols).
+//  Odd rows are offset right by TILE/2 → forms a hex-like shape.
+//  All 6 cells share the same pole. Max Amp limit via applyPowerScale().
+// ─────────────────────────────────────────────────
+// streamSendNow lives in the serial worker — notifyWorker(urgent=true) is used from main thread
+let hexActive     = false;
+let hexAnchorRow  = 15;   // CENTER row  (ring of 6 neighbors surrounds this)
+let hexAnchorCol  = 15;   // CENTER col
+let hexPole       = 1;    // +1 = N (+7),  -1 = S (−7)
+
+// Returns the 6 hex-neighbors of center (ci, cj).
+// In this offset grid: odd rows are shifted right by TILE/2.
+// Neighbor offsets depend on row parity.
+function hexGetCells(ci, cj) {
+  const pairs = ci % 2 === 0
+    // even center row
+    ? [[ci, cj-1],[ci, cj+1],[ci-1, cj-1],[ci-1, cj],[ci+1, cj-1],[ci+1, cj]]
+    // odd center row
+    : [[ci, cj-1],[ci, cj+1],[ci-1, cj],[ci-1, cj+1],[ci+1, cj],[ci+1, cj+1]];
+  return pairs.filter(([r,c]) => r>=0 && r<ROWS && c>=0 && c<COLS);
+}
+
+function hexClearBuffer(ar, ac) {
+  magnetData[ijToId(ar, ac) - 1] = 0;
+  for (const [r, c] of hexGetCells(ar, ac)) magnetData[ijToId(r, c) - 1] = 0;
+}
+
+function hexWriteBuffer(ar, ac) {
+  const val = hexPole * MAX_INT;
+  magnetData[ijToId(ar, ac) - 1] = val;
+  for (const [r, c] of hexGetCells(ar, ac)) magnetData[ijToId(r, c) - 1] = val;
+}
+
+function hexToggleActive() {
+  hexActive = !hexActive;
+  const btn = document.getElementById('btn-hex-active');
+  if (hexActive) {
+    hexWriteBuffer(hexAnchorRow, hexAnchorCol);
+    btn.textContent = 'Deactivate'; btn.classList.add('on');
+    lastAction = 'HEX_ON';
+  } else {
+    hexClearBuffer(hexAnchorRow, hexAnchorCol);
+    btn.textContent = 'Activate'; btn.classList.remove('on');
+    lastAction = 'HEX_OFF';
+  }
+  syncGridFromBuffer(); updateId++; updateHexDisplay(); drawGrid();
+}
+
+function hexTogglePole() {
+  hexPole = -hexPole;
+  if (hexActive) { hexWriteBuffer(hexAnchorRow, hexAnchorCol); syncGridFromBuffer(); updateId++; drawGrid(); }
+  updateHexDisplay();
+}
+
+function moveHex(drow, dcol) {
+  // Auto-activate on first button/key press
+  if (!hexActive) {
+    hexActive = true;
+    const btn = document.getElementById('btn-hex-active');
+    btn.textContent = 'Deactivate'; btn.classList.add('on');
+  }
+  hexClearBuffer(hexAnchorRow, hexAnchorCol);
+  // Center must stay at least 1 cell from the grid edge (ring needs neighbors)
+  hexAnchorRow = Math.max(1, Math.min(ROWS - 2, hexAnchorRow + drow));
+  hexAnchorCol = Math.max(1, Math.min(COLS - 2, hexAnchorCol + dcol));
+  hexWriteBuffer(hexAnchorRow, hexAnchorCol);
+  syncGridFromBuffer();
+  notifyWorker(true);   // trigger immediate serial send in streamLoop
+  updateId++;
+  lastAction = `HEX_C(${hexAnchorRow},${hexAnchorCol})`;
+  updateHexDisplay(); drawGrid();
+}
+
+function updateHexDisplay() {
+  document.getElementById('hex-pos').textContent       = `${hexAnchorRow}, ${hexAnchorCol}`;
+  document.getElementById('hex-pole-disp').textContent = hexPole > 0 ? 'N (+7)' : 'S (−7)';
+  document.getElementById('hex-status').textContent    = hexActive ? 'ACTIVE' : 'INACTIVE';
+  const pb = document.getElementById('btn-hex-pole');
+  pb.textContent  = hexPole > 0 ? 'N Pole (+)' : 'S Pole (−)';
+  pb.style.borderColor = hexPole > 0 ? '#cc3030' : '#3068cc';
+  pb.style.color       = hexPole > 0 ? '#cc3030' : '#3068cc';
+}
+
+// ─────────────────────────────────────────────────
+//  CLUSTER MOVER
+// ─────────────────────────────────────────────────
+const MAX_CLUSTERS    = 3;
+const CLUSTER_COLORS  = ['#FF8C00', '#CC44FF', '#00FFCC'];
+let clusters          = [];
+let activeClusterIdx  = -1;
+let clusterSelecting  = false;
+let clusterPending    = new Set();  // "row,col" keys being selected
+
+function clusterStartSelect() {
+  if (clusters.length >= MAX_CLUSTERS) return;
+  clusterSelecting = true;
+  clusterPending.clear();
+  document.getElementById('btn-cl-new').disabled    = true;
+  document.getElementById('btn-cl-save').disabled   = false;
+  document.getElementById('btn-cl-cancel').disabled = false;
+  document.getElementById('cl-hint').textContent    = 'Left-drag = select · Right-drag = deselect · Save when done.';
+  canvas.style.cursor = 'cell';
+  drawGrid();
+}
+
+function clusterSave() {
+  if (!clusterPending.size) { clusterCancelSelect(); return; }
+  let sumR = 0, sumC = 0;
+  for (const key of clusterPending) {
+    const [r, c] = key.split(',').map(Number); sumR += r; sumC += c;
+  }
+  const anchorRow = Math.round(sumR / clusterPending.size);
+  const anchorCol = Math.round(sumC / clusterPending.size);
+  const cells = [];
+  for (const key of clusterPending) {
+    const [r, c] = key.split(',').map(Number);
+    cells.push({ dr: r - anchorRow, dc: c - anchorCol, value: magnetData[ijToId(r, c) - 1] });
+  }
+  const color = CLUSTER_COLORS[clusters.length % CLUSTER_COLORS.length];
+  clusters.push({ color, anchorRow, anchorCol, cells });
+  clusterCancelSelect();
+  renderClusterList();
+  drawGrid();
+}
+
+function clusterCancelSelect() {
+  clusterSelecting = false;
+  clusterPending.clear();
+  document.getElementById('btn-cl-new').disabled    = clusters.length >= MAX_CLUSTERS;
+  document.getElementById('btn-cl-save').disabled   = true;
+  document.getElementById('btn-cl-cancel').disabled = true;
+  document.getElementById('cl-hint').textContent    =
+    clusters.length >= MAX_CLUSTERS ? 'Max 3 clusters reached.' : 'Up to 3 clusters. Click [New Cluster] to begin.';
+  canvas.style.cursor = 'crosshair';
+  drawGrid();
+}
+
+function clusterActivate(idx) {
+  activeClusterIdx = (activeClusterIdx === idx) ? -1 : idx;
+  renderClusterList();
+}
+
+function clusterDelete(idx) {
+  const cl = clusters[idx];
+  for (const cell of cl.cells) {
+    const r = cl.anchorRow + cell.dr, c = cl.anchorCol + cell.dc;
+    if (r >= 0 && r < ROWS && c >= 0 && c < COLS) magnetData[ijToId(r, c) - 1] = 0;
+  }
+  syncGridFromBuffer();
+  clusters.splice(idx, 1);
+  if      (activeClusterIdx === idx)  activeClusterIdx = -1;
+  else if (activeClusterIdx > idx)    activeClusterIdx--;
+  renderClusterList();
+  notifyWorker(true);
+  updateId++; lastAction = 'CL_DEL'; drawGrid();
+}
+
+function clusterMoveActive(drow, dcol) {
+  if (activeClusterIdx < 0 || activeClusterIdx >= clusters.length) return;
+  moveCluster(activeClusterIdx, drow, dcol);
+}
+
+function moveCluster(idx, drow, dcol) {
+  const cl = clusters[idx];
+  // Erase current positions
+  for (const cell of cl.cells) {
+    const r = cl.anchorRow + cell.dr, c = cl.anchorCol + cell.dc;
+    if (r >= 0 && r < ROWS && c >= 0 && c < COLS) magnetData[ijToId(r, c) - 1] = 0;
+  }
+  // Move anchor (allow cells to go partially off-grid; they just won't write)
+  cl.anchorRow += drow;
+  cl.anchorCol += dcol;
+  // Write new positions (in-bounds only)
+  for (const cell of cl.cells) {
+    const r = cl.anchorRow + cell.dr, c = cl.anchorCol + cell.dc;
+    if (r >= 0 && r < ROWS && c >= 0 && c < COLS) magnetData[ijToId(r, c) - 1] = cell.value;
+  }
+  syncGridFromBuffer();
+  notifyWorker(true);
+  updateId++; lastAction = `CL${idx+1}(${cl.anchorRow},${cl.anchorCol})`; drawGrid();
+}
+
+function renderClusterList() {
+  const el = document.getElementById('cl-list');
+  if (!clusters.length) {
+    el.innerHTML = '<div style="color:var(--text-muted);font-size:11px">No clusters yet.</div>';
+    return;
+  }
+  el.innerHTML = clusters.map((cl, i) => {
+    const active = i === activeClusterIdx;
+    return `<div onclick="clusterActivate(${i})" style="
+        display:flex;align-items:center;gap:8px;padding:5px 8px;cursor:pointer;
+        border:1px solid ${active ? cl.color : 'var(--border-dim)'};
+        background:${active ? '#111' : 'transparent'};
+        color:${active ? cl.color : 'var(--text)'};margin-bottom:3px">
+      <span style="display:inline-block;width:10px;height:10px;background:${cl.color};flex-shrink:0"></span>
+      <span style="flex:1;font-size:12px">Cluster ${i+1}</span>
+      <span style="font-size:11px;color:var(--text-muted)">${cl.cells.length} cells</span>
+      <button class="btn" style="padding:2px 6px;font-size:11px"
+        onclick="event.stopPropagation();clusterDelete(${i})">Del</button>
+    </div>`;
+  }).join('');
+  document.getElementById('btn-cl-new').disabled = clusters.length >= MAX_CLUSTERS;
+}
+
+// WASD keyboard — always active; blurs input focus automatically
+window.addEventListener('keydown', e => {
+  const k = e.key.toLowerCase();
+  if (!['w','a','s','d'].includes(k)) return;
+  // If an input is focused, blur it so WASD takes over
+  if (document.activeElement && document.activeElement.tagName === 'INPUT') {
+    document.activeElement.blur();
+  }
+  e.preventDefault();
+  const drow = k==='w'?-1 : k==='s'?1  : 0;
+  const dcol = k==='a'?-1 : k==='d'?1  : 0;
+  if (activeClusterIdx >= 0 && activeClusterIdx < clusters.length) moveCluster(activeClusterIdx, drow, dcol);
+  else moveHex(drow, dcol);
+});
+
+// ─────────────────────────────────────────────────
+//  SERIAL
+// ─────────────────────────────────────────────────
+async function toggleConnect() { isConnected ? await disconnect() : await connect(); }
+
+async function connect() {
+  if (!('serial' in navigator)) {
+    termLog('[ERROR] Web Serial API not supported — use Chrome or Edge 89+', 'err'); return;
+  }
+  try {
+    BAUD_RATE      = parseInt(document.getElementById('inp-baud').value)   || 921600;
+    HZ_LIMIT       = parseFloat(document.getElementById('inp-hz').value)   || 15;
+    ACK_TIMEOUT_MS = parseFloat(document.getElementById('inp-ack').value)  * 1000 || 1000;
+    PRINT_EVERY    = parseInt(document.getElementById('inp-print').value)  || 1;
+    serialPort = await navigator.serial.requestPort();
+    await serialPort.open({ baudRate: BAUD_RATE });
+    isConnected = true; setConnUI(true);
+    const info = serialPort.getInfo();
+    const portStr = `VID:${(info.usbVendorId||0).toString(16).toUpperCase()} PID:${(info.usbProductId||0).toString(16).toUpperCase()}`;
+    document.getElementById('sys-port').textContent = portStr;
+    document.getElementById('sys-baud').textContent = BAUD_RATE;
+    document.getElementById('sys-hz').textContent   = HZ_LIMIT;
+    termLog(`[COMM] PORT=${portStr} BAUD=${BAUD_RATE} @ ${HZ_LIMIT} Hz (worker)`, 'info');
+
+    // ── Launch serial worker and transfer readable/writable streams ──
+    if (!serialWorkerBlobUrl) serialWorkerBlobUrl = createSerialWorkerBlobUrl();
+    serialWorker = new Worker(serialWorkerBlobUrl);
+    serialWorker.onmessage = handleWorkerMessage;
+    const readable = serialPort.readable;
+    const writable = serialPort.writable;
+    serialWorker.postMessage({
+      type: 'STREAMS', readable, writable,
+      hz: HZ_LIMIT, ackMs: ACK_TIMEOUT_MS, printEvery: PRINT_EVERY,
+      maxAmpVal: getMaxAmp()
+    }, [readable, writable]);
+
+  } catch(e) { termLog(`[CONN ERROR] ${e.message}`, 'err'); }
+}
+
+async function disconnect() {
+  isConnected = false; setConnUI(false);
+  if (serialWorker) {
+    // Wait for worker to release streams (max 1 s), then close port
+    await new Promise(resolve => {
+      const tid = setTimeout(resolve, 1000);
+      serialWorker.addEventListener('message', function once(e) {
+        if (e.data.type === 'STOPPED') {
+          clearTimeout(tid);
+          serialWorker.removeEventListener('message', once);
+          resolve();
+        }
+      });
+      serialWorker.postMessage({ type: 'STOP' });
+    });
+    serialWorker.terminate();
+    serialWorker = null;
+  }
+  try { if (serialPort) await serialPort.close(); } catch(_) {}
+  serialPort = null;
+  termLog('[COMM] Disconnected', 'warn');
+}
+
+function setConnUI(c) {
+  const pill = document.getElementById('conn-pill');
+  const btn  = document.getElementById('btn-connect');
+  pill.textContent = c ? 'CONNECTED' : 'DISCONNECTED';
+  pill.classList.toggle('connected', c);
+  btn.textContent = c ? 'Disconnect' : 'Connect';
+}
+
+// ─────────────────────────────────────────────────
+//  ACK STATE MACHINE
+// ─────────────────────────────────────────────────
+async function readerLoop() {
+  ackState = 'WAIT_AA'; ackSeqBytes = [];
+  try {
+    while (isConnected && serialReader) {
+      const { value, done } = await serialReader.read();
+      if (done) break;
+      for (const b of value) processAckByte(b);
+    }
+  } catch(e) { if (isConnected) termLog(`[READER] ${e.message}`, 'err'); }
+}
+
+function processAckByte(b) {
+  if (ackState === 'WAIT_AA') {
+    if (b === 0xAA) ackState = 'WAIT_55';
+  } else if (ackState === 'WAIT_55') {
+    if      (b === 0x55) { ackState = 'READ_SEQ'; ackSeqBytes = []; }
+    else if (b === 0xAA) { /* stay */ }
+    else                 { ackState = 'WAIT_AA'; }
+  } else if (ackState === 'READ_SEQ') {
+    ackSeqBytes.push(b);
+    if (ackSeqBytes.length === 4) ackState = 'READ_STATUS';
+  } else if (ackState === 'READ_STATUS') {
+    const seq = ackSeqBytes[0]|(ackSeqBytes[1]<<8)|(ackSeqBytes[2]<<16)|(ackSeqBytes[3]<<24);
+    const status = b; ackState = 'WAIT_AA'; ackSeqBytes = [];
+    if (pendingAck && pendingAck.seq === seq) {
+      clearTimeout(pendingAck.timer); pendingAck.resolve(status); pendingAck = null;
+    }
+  }
+}
+
+function waitForAck(seq, ms) {
+  return new Promise((resolve, reject) => {
+    const t = setTimeout(() => { if (pendingAck?.seq===seq) { pendingAck=null; reject(new Error('ACK timeout')); } }, ms);
+    pendingAck = { seq, resolve, reject, timer: t };
+  });
+}
+
+// ─────────────────────────────────────────────────
+//  EMERGENCY STOP
+// ─────────────────────────────────────────────────
+async function emergencyStop() {
+  // 1. Zero all magnets
+  gridStage.fill(0); magnetData.fill(0);
+  // 2. Kill hex unit
+  hexActive = false;
+  const hbtn = document.getElementById('btn-hex-active');
+  hbtn.textContent = 'Activate'; hbtn.classList.remove('on');
+  // 3. Kill CSV player
+  csvPlaying = false; csvTriggerOnce = false; csvLastStatus = 'E-STOP';
+  const pbtn = document.getElementById('btn-play');
+  pbtn.textContent = 'Play'; pbtn.classList.remove('on');
+  updateCsvStats();
+  // 4. Push zeros to worker for immediate transmission
+  notifyWorker(true);
+  updateId++; lastAction = 'E-STOP'; drawGrid();
+  termLog('[E-STOP] ALL MAGNETS OFF', 'err');
+}
+
+// ─────────────────────────────────────────────────
+//  STREAM LOOP — 15 Hz latest-only
+// ─────────────────────────────────────────────────
+async function streamLoop() {
+  globalSeq = 0; badAck = 0; lastRttUs = 0; streamRunning = true;
+  const period = 1000 / HZ_LIMIT;
+  let nextT = performance.now();
+  termLog(`[STREAM] started @ ${HZ_LIMIT} Hz`, 'info');
+  while (streamRunning && isConnected) {
+    const now = performance.now();
+    if (now < nextT && !streamSendNow) { await sleep(Math.min(2, nextT-now)); continue; }
+    streamSendNow = false;
+    nextT = now + period;
+    // snapshot + apply power-limit scaling before sending
+    const snapshot = applyPowerScale(magnetData);
+    globalSeq++;
+    let frame;
+    try { frame = buildFrame(globalSeq, buildPayload(snapshot)); }
+    catch(e) { termLog(`[BUILD ERR] ${e.message}`, 'err'); continue; }
+    const t0 = performance.now();
+    try { await serialWriter.write(frame); }
+    catch(e) { termLog(`[WRITE ERR] ${e.message}`, 'err'); break; }
+    let status = -1;
+    try { status = await waitForAck(globalSeq, ACK_TIMEOUT_MS); }
+    catch(_) { badAck++; updateSysStats(); continue; }
+    const rttMs = performance.now()-t0;
+    lastRttUs = rttMs*1000;
+    if (globalSeq % PRINT_EVERY === 0)
+      termLog(`seq=${pad(globalSeq,6)} status=${pad(status,3)} rtt_us=${lastRttUs.toFixed(1).padStart(10)} hz=${(1000/rttMs).toFixed(2).padStart(8)} bad_ack=${badAck}`, 'ok');
+    updateSysStats();
+  }
+  termLog('[STREAM] stopped', 'warn');
+}
+
+function updateSysStats() {
+  document.getElementById('sys-seq').textContent    = globalSeq;
+  document.getElementById('sys-badack').textContent = badAck;
+  document.getElementById('sys-rtt').textContent    = lastRttUs > 0 ? lastRttUs.toFixed(1) : '–';
+}
+
+// ─────────────────────────────────────────────────
+//  POWER MONITOR
+//  - 8 magnets share 1 A  →  each active magnet at full (7) = 1/8 A
+//  - current scales linearly with |intensity|: I_i = |v_i|/7 × 1/8
+//  - total_amp = Σ I_i
+//  - K = min(1, max_amp / total_amp)   → all intensities scaled by K before sending
+// ─────────────────────────────────────────────────
+function getMaxAmp() {
+  return Math.max(0.001, parseFloat(document.getElementById('inp-maxamp').value) || 10);
+}
+
+// Returns { activeCount, totalAmp, K, effectiveAmp, powerW }
+function computePower(data) {
+  let totalAmp = 0, activeCount = 0;
+  for (const v of data) {
+    if (v !== 0) { activeCount++; totalAmp += (Math.abs(v) / 7) / 8; }
+  }
+  const maxAmp = getMaxAmp();
+  const K = totalAmp > maxAmp ? maxAmp / totalAmp : 1.0;
+  return { activeCount, totalAmp, K, effectiveAmp: totalAmp * K, powerW: totalAmp * K * 24 };
+}
+
+// Scale data by K before sending (grid display stays unchanged)
+function applyPowerScale(data) {
+  const { K } = computePower(data);
+  if (K >= 1.0) return data;
+  const scaled = new Int8Array(N_MAG);
+  for (let i = 0; i < N_MAG; i++) {
+    if (data[i] !== 0) {
+      const s = data[i] > 0 ? 1 : -1;
+      scaled[i] = s * Math.max(1, Math.round(Math.abs(data[i]) * K));
+    }
+  }
+  return scaled;
+}
+
+function updatePowerDisplay() {
+  const { activeCount, totalAmp, K, effectiveAmp, powerW } = computePower(magnetData);
+  const maxAmp = getMaxAmp();
+  document.getElementById('pw-count').textContent  = activeCount;
+
+  // Current display box
+  const pct = maxAmp > 0 ? Math.min(100, (totalAmp / maxAmp) * 100) : 0;
+  let barColor, curColor;
+  if (pct >= 100)      { barColor = '#FF0000'; curColor = '#FF0000'; }
+  else if (pct >= 90)  { barColor = '#FF2020'; curColor = '#FF2020'; }
+  else if (pct >= 80)  { barColor = 'var(--err)'; curColor = 'var(--err)'; }
+  else                 { barColor = 'var(--accent)'; curColor = 'var(--accent)'; }
+  const over80 = pct >= 80;
+  document.getElementById('pw-cur-display').style.color = curColor;
+  document.getElementById('pw-cur-display').textContent = `${totalAmp.toFixed(3)} A`;
+  document.getElementById('pw-cur-watt').textContent    = `${powerW.toFixed(1)} W`;
+  document.getElementById('pw-bar-fill').style.width    = `${pct.toFixed(1)}%`;
+  document.getElementById('pw-bar-fill').style.background = barColor;
+  document.getElementById('pw-bar-pct').style.color    = over80 ? 'var(--err)' : 'var(--text-dim)';
+  document.getElementById('pw-bar-pct').textContent    = `${pct.toFixed(0)}%`;
+
+  const warn = document.getElementById('pw-warn');
+  if (totalAmp > maxAmp) {
+    warn.style.color = 'var(--err)';
+    warn.textContent = `⚠ OVER LIMIT  ${totalAmp.toFixed(3)} A > ${maxAmp} A  →  K = ${K.toFixed(4)}`;
+  } else {
+    warn.style.color = 'var(--ok)';
+    warn.textContent = totalAmp > 0 ? `OK  ${totalAmp.toFixed(3)} A / ${maxAmp} A` : '';
+  }
+}
+
+// ─────────────────────────────────────────────────
+//  PROTOCOL
+// ─────────────────────────────────────────────────
+function crc16_ccitt(data) {
+  let crc = 0xFFFF;
+  for (const b of data) {
+    crc ^= (b << 8) & 0xFFFF;
+    for (let i = 0; i < 8; i++)
+      crc = (crc & 0x8000) ? ((crc<<1)^0x1021)&0xFFFF : (crc<<1)&0xFFFF;
+  }
+  return crc;
+}
+
+function buildPayload(mag) {
+  const out = new Uint8Array(DATA_BYTES);
+  for (let i = 0; i < DATA_BYTES; i++)
+    out[i] = (((mag[2*i+1]+7)<<4)|(mag[2*i]+7)) & 0xFF;
+  return out;
+}
+
+function buildFrame(seq, data512) {
+  const frame = new Uint8Array(FRAME_BYTES);
+  const view  = new DataView(frame.buffer);
+  view.setUint16(0, FRAME_MAGIC, true);   // [0xAA, 0x55] on wire
+  view.setUint32(2, seq,         true);
+  frame.set(data512, HDR_BYTES);
+  view.setUint16(HDR_BYTES+DATA_BYTES, crc16_ccitt(frame.slice(0, HDR_BYTES+DATA_BYTES)), true);
+  return frame;
+}
+
+// ─────────────────────────────────────────────────
+//  TERMINAL
+// ─────────────────────────────────────────────────
+const terminal = document.getElementById('terminal');
+let termCount = 0;
+const MAX_LINES = 600;
+
+function termLog(text, cls='def') {
+  const el = document.createElement('div');
+  el.className = `t-${cls}`; el.textContent = text;
+  terminal.appendChild(el);
+  if (++termCount > MAX_LINES) { terminal.removeChild(terminal.firstChild); termCount--; }
+  terminal.scrollTop = terminal.scrollHeight;
+}
+
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const pad   = (n, w) => String(n).padStart(w);
+
+// ─────────────────────────────────────────────────
+//  SERIAL WORKER — decoupled from main/camera thread
+// ─────────────────────────────────────────────────
+function notifyWorker(urgent = false) {
+  if (!serialWorker) return;
+  serialWorker.postMessage({
+    type: 'UPDATE_DATA',
+    data: Array.from(magnetData),
+    maxAmp: getMaxAmp(),
+    urgent
+  });
+}
+
+function handleWorkerMessage(e) {
+  const msg = e.data;
+  if (msg.type === 'LOG') {
+    termLog(msg.text, msg.cls);
+  } else if (msg.type === 'STATS') {
+    globalSeq = msg.seq; badAck = msg.badAck; lastRttUs = msg.rtt;
+    updateSysStats();
+  } else if (msg.type === 'STOPPED') {
+    // Worker loop ended unexpectedly (write error etc.) — clean up UI
+    if (isConnected) {
+      isConnected = false; setConnUI(false);
+      try { if (serialPort) serialPort.close(); } catch(_) {}
+      serialPort = null;
+      if (serialWorker) { serialWorker.terminate(); serialWorker = null; }
+    }
+  }
+}
+
+function createSerialWorkerBlobUrl() {
+  const src = `'use strict';
+const N_MAG=1024,FRAME_MAGIC=0x55AA,HDR_BYTES=6,DATA_BYTES=512,CRC_BYTES=2;
+const FRAME_BYTES=HDR_BYTES+DATA_BYTES+CRC_BYTES;
+let serialWriter=null,serialReader=null,streamRunning=false;
+let HZ_LIMIT=15,ACK_TIMEOUT_MS=1000,PRINT_EVERY=1;
+let globalSeq=0,badAck=0,lastRttUs=0;
+let ackState='WAIT_AA',ackSeqBytes=[],pendingAck=null;
+let streamSendNow=false,maxAmp=10;
+const magnetData=new Int8Array(N_MAG);
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const pad=(n,w)=>String(n).padStart(w);
+function log(t,c='def'){self.postMessage({type:'LOG',text:t,cls:c});}
+function crc16(data){
+  let c=0xFFFF;
+  for(const b of data){c^=(b<<8)&0xFFFF;for(let i=0;i<8;i++)c=(c&0x8000)?((c<<1)^0x1021)&0xFFFF:(c<<1)&0xFFFF;}
+  return c;
+}
+function buildPayload(mag){
+  const out=new Uint8Array(DATA_BYTES);
+  for(let i=0;i<DATA_BYTES;i++)out[i]=(((mag[2*i+1]+7)<<4)|(mag[2*i]+7))&0xFF;
+  return out;
+}
+function buildFrame(seq,d){
+  const f=new Uint8Array(FRAME_BYTES),v=new DataView(f.buffer);
+  v.setUint16(0,FRAME_MAGIC,true);v.setUint32(2,seq,true);
+  f.set(d,HDR_BYTES);v.setUint16(HDR_BYTES+DATA_BYTES,crc16(f.slice(0,HDR_BYTES+DATA_BYTES)),true);
+  return f;
+}
+function applyPowerScale(data){
+  let tot=0;for(const v of data)if(v!==0)tot+=(Math.abs(v)/7)/8;
+  const K=tot>maxAmp?maxAmp/tot:1.0;
+  if(K>=1.0)return data;
+  const s=new Int8Array(N_MAG);
+  for(let i=0;i<N_MAG;i++)if(data[i]!==0){const sg=data[i]>0?1:-1;s[i]=sg*Math.max(1,Math.round(Math.abs(data[i])*K));}
+  return s;
+}
+function procAck(b){
+  if(ackState==='WAIT_AA'){if(b===0xAA)ackState='WAIT_55';}
+  else if(ackState==='WAIT_55'){if(b===0x55){ackState='READ_SEQ';ackSeqBytes=[];}else if(b!==0xAA)ackState='WAIT_AA';}
+  else if(ackState==='READ_SEQ'){ackSeqBytes.push(b);if(ackSeqBytes.length===4)ackState='READ_STATUS';}
+  else if(ackState==='READ_STATUS'){
+    const seq=ackSeqBytes[0]|(ackSeqBytes[1]<<8)|(ackSeqBytes[2]<<16)|(ackSeqBytes[3]<<24);
+    ackState='WAIT_AA';ackSeqBytes=[];
+    if(pendingAck&&pendingAck.seq===seq){clearTimeout(pendingAck.timer);pendingAck.resolve(b);pendingAck=null;}
+  }
+}
+function waitAck(seq,ms){
+  return new Promise((res,rej)=>{
+    const t=setTimeout(()=>{if(pendingAck?.seq===seq){pendingAck=null;rej(new Error('ACK timeout'));}},ms);
+    pendingAck={seq,resolve:res,reject:rej,timer:t};
+  });
+}
+async function readerLoop(){
+  ackState='WAIT_AA';ackSeqBytes=[];
+  try{while(streamRunning&&serialReader){const{value,done}=await serialReader.read();if(done)break;for(const b of value)procAck(b);}}
+  catch(e){if(streamRunning)log('[READER] '+e.message,'err');}
+}
+async function streamLoop(){
+  globalSeq=0;badAck=0;lastRttUs=0;
+  const period=1000/HZ_LIMIT;let nextT=performance.now();
+  log('[STREAM] started @ '+HZ_LIMIT+' Hz','info');
+  while(streamRunning&&serialWriter){
+    const now=performance.now();
+    if(now<nextT&&!streamSendNow){await sleep(Math.min(2,nextT-now));continue;}
+    streamSendNow=false;nextT=now+period;
+    const snap=applyPowerScale(magnetData);globalSeq++;
+    let frame;try{frame=buildFrame(globalSeq,buildPayload(snap));}catch(e){log('[BUILD ERR] '+e.message,'err');continue;}
+    const t0=performance.now();
+    try{await serialWriter.write(frame);}catch(e){log('[WRITE ERR] '+e.message,'err');break;}
+    let status=-1;
+    try{status=await waitAck(globalSeq,ACK_TIMEOUT_MS);}catch(_){badAck++;self.postMessage({type:'STATS',seq:globalSeq,badAck,rtt:lastRttUs});continue;}
+    const rttMs=performance.now()-t0;lastRttUs=rttMs*1000;
+    if(globalSeq%PRINT_EVERY===0)log('seq='+pad(globalSeq,6)+' status='+pad(status,3)+' rtt_us='+lastRttUs.toFixed(1).padStart(10)+' hz='+(1000/rttMs).toFixed(2).padStart(8)+' bad_ack='+badAck,'ok');
+    self.postMessage({type:'STATS',seq:globalSeq,badAck,rtt:lastRttUs});
+  }
+  log('[STREAM] stopped','warn');
+  streamRunning=false;self.postMessage({type:'STOPPED'});
+}
+self.onmessage=async({data:msg})=>{
+  if(msg.type==='STREAMS'){
+    serialWriter=msg.writable.getWriter();serialReader=msg.readable.getReader();
+    HZ_LIMIT=msg.hz;ACK_TIMEOUT_MS=msg.ackMs;PRINT_EVERY=msg.printEvery;maxAmp=msg.maxAmpVal;
+    streamRunning=true;readerLoop();streamLoop();
+  } else if(msg.type==='UPDATE_DATA'){
+    magnetData.set(msg.data);
+    if(msg.maxAmp!==undefined)maxAmp=msg.maxAmp;
+    if(msg.urgent)streamSendNow=true;
+  } else if(msg.type==='STOP'){
+    streamRunning=false;
+    if(pendingAck){clearTimeout(pendingAck.timer);pendingAck.reject(new Error('stopped'));pendingAck=null;}
+    try{await serialReader.cancel();}catch(_){}
+    try{await serialWriter.close();}catch(_){}
+    serialReader=null;serialWriter=null;
+    self.postMessage({type:'STOPPED'});
+  }
+};`;
+  return URL.createObjectURL(new Blob([src], { type: 'application/javascript' }));
+}
+
+// ─────────────────────────────────────────────────
+//  INIT
+// ─────────────────────────────────────────────────
+window.addEventListener('load', () => {
+  initCanvas();
+  document.getElementById('btn-loop').classList.add('on');
+  termLog('[SYSTEM] SAM LAB – Electromagnet Controller', 'info');
+  termLog('[SYSTEM] Chrome / Edge 89+ required for Web Serial', 'info');
+  termLog('[COMM]   Click Connect to open USB serial port', 'def');
+  termLog('[MANUAL] Left-click = NEG (S, –7)   Right-click = POS (N, +7)', 'def');
+  termLog('[MANUAL] Drag to paint continuously', 'def');
+  termLog('[CSV]    Drop CSV files then Play', 'def');
+});
+
+window.addEventListener('resize', initCanvas);
+</script>
+
+<!-- ═══════════════════════════════════════════════════
+     CAMERA — completely independent, zero coupling
+     Hooks into Connect button via a second event listener.
+     Does NOT touch any variable or function above.
+════════════════════════════════════════════════════ -->
+<script>
+(function () {
+  'use strict';
+
+  const video          = document.getElementById('cam-video');
+  const placeholder    = document.getElementById('cam-placeholder');
+  const placeholderTxt = document.getElementById('cam-placeholder-text');
+  const dot            = document.getElementById('cam-status-dot');
+  const camBtn         = document.getElementById('btn-cam-connect');
+  const camPill        = document.getElementById('cam-pill');
+  const recBtn         = document.getElementById('btn-cam-record');
+  const recPill        = document.getElementById('rec-pill');
+  let camStream        = null;
+  let mediaRecorder    = null;
+  let recordedChunks   = [];
+
+  async function startCamera() {
+    try {
+      camStream = await navigator.mediaDevices.getUserMedia({
+        video: { width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 30 } },
+        audio: false
+      });
+      video.srcObject = camStream;
+      placeholder.style.display = 'none';
+      dot.classList.add('live');
+      camBtn.textContent = 'Cam Disconnect';
+      camPill.textContent = 'CAM LIVE';
+      camPill.style.borderColor = '#F48771';
+      camPill.style.color = '#F48771';
+      recBtn.disabled = false;
+    } catch (e) {
+      placeholderTxt.textContent = 'Camera Error: ' + e.message;
+    }
+  }
+
+  function stopCamera() {
+    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+      mediaRecorder.stop();
+    }
+    if (camStream) {
+      camStream.getTracks().forEach(t => t.stop());
+      camStream = null;
+    }
+    video.srcObject = null;
+    placeholder.style.display = 'flex';
+    placeholderTxt.textContent = 'No Camera';
+    dot.classList.remove('live');
+    camBtn.textContent = 'Cam Connect';
+    camPill.textContent = 'NO CAM';
+    camPill.style.borderColor = '#3A5F6F';
+    camPill.style.color = '#858585';
+    recBtn.disabled = true;
+    recBtn.textContent = 'Record';
+    recBtn.style.borderColor = '#F48771';
+    recBtn.style.color = '#F48771';
+    recPill.style.display = 'none';
+  }
+
+  function startRecording() {
+    if (!camStream) return;
+    recordedChunks = [];
+
+    // Pick best supported codec (prefer mp4 for wider compatibility)
+    const mimeTypes = [
+      'video/mp4;codecs=avc1',
+      'video/mp4',
+      'video/webm;codecs=vp9',
+      'video/webm;codecs=vp8',
+      'video/webm',
+    ];
+    const mimeType = mimeTypes.find(t => MediaRecorder.isTypeSupported(t)) || '';
+
+    mediaRecorder = new MediaRecorder(camStream, {
+      ...(mimeType ? { mimeType } : {}),
+      videoBitsPerSecond: 8_000_000
+    });
+    mediaRecorder.ondataavailable = e => { if (e.data && e.data.size > 0) recordedChunks.push(e.data); };
+    mediaRecorder.onstop = () => {
+      const ext  = (mediaRecorder.mimeType || '').includes('mp4') ? 'mp4' : 'webm';
+      const blob = new Blob(recordedChunks, { type: mediaRecorder.mimeType || 'video/webm' });
+      const url  = URL.createObjectURL(blob);
+      const ts   = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+      const a    = document.createElement('a');
+      a.href     = url;
+      a.download = `cam_recording_${ts}.${ext}`;
+      a.click();
+      // revoke after a short delay to allow download to start
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+    };
+    mediaRecorder.start(1000); // collect data every 1s → keeps memory manageable for long recordings
+
+    recBtn.textContent = 'Stop';
+    recBtn.style.borderColor = '#FFFF00';
+    recBtn.style.color = '#FFFF00';
+    recPill.style.display = '';
+  }
+
+  function stopRecording() {
+    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+      mediaRecorder.stop();
+    }
+    recBtn.textContent = 'Record';
+    recBtn.style.borderColor = '#F48771';
+    recBtn.style.color = '#F48771';
+    recPill.style.display = 'none';
+  }
+
+  camBtn.addEventListener('click', () => {
+    if (!camStream) startCamera();
+    else stopCamera();
+  });
+
+  recBtn.addEventListener('click', () => {
+    if (!mediaRecorder || mediaRecorder.state === 'inactive') startRecording();
+    else stopRecording();
+  });
+})();
+</script>
+</body>
+</html>
