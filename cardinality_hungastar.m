@@ -33,9 +33,9 @@ P.check_collisions = true;
 P.show_figure = true;
 P.show_grid = true;
 P.marker_size = 85;
-P.anim_pause = 0.08;
+P.anim_pause = 0;
 
-P.save_video = false;
+P.save_video = true;
 P.video_name = 'integrated_transition_preview.mp4';
 P.frame_rate = 15;
 

@@ -35,7 +35,7 @@ P.show_grid = true;
 P.marker_size = 85;
 P.anim_pause = 0.08;
 
-P.save_video = false;
+P.save_video = true;
 P.video_name = 'integrated_transition_preview.mp4';
 P.frame_rate = 15;
 
@@ -297,7 +297,7 @@ while ~all(done) && stepCounter <= P.max_dynamic_steps
 
     allMaps{end+1,1} = cellsToMap(currentAgentCells, P.N, P.N, ...
         P.occupied_value, P.empty_value);
-    phaseLabels{end+1,1} = 'dynamic_hungarian_astar';
+    phaseLabels{end+1,1} = 'dynamic hungarian astar';
 
     agentCellsByFrame{end+1,1} = currentAgentCells;
     agentTrajByFrame{end+1,1} = agentTraj;
